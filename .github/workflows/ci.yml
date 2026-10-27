@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Skip until the monorepo exists
+        id: setup
+        run: |
+          if [ -f package.json ]; then echo "ready=true" >> "$GITHUB_OUTPUT"; else echo "No package.json yet, skipping checks."; fi
+
+      - uses: pnpm/action-setup@v4
+        if: steps.setup.outputs.ready == 'true'
+
+      - uses: actions/setup-node@v4
+        if: steps.setup.outputs.ready == 'true'
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install
+        if: steps.setup.outputs.ready == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        if: steps.setup.outputs.ready == 'true'
+        run: pnpm lint
+
+      - name: Type-check
+        if: steps.setup.outputs.ready == 'true'
+        run: pnpm typecheck
+
+      - name: Test
+        if: steps.setup.outputs.ready == 'true'
+        run: pnpm test
