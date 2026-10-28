@@ -23,8 +23,12 @@ describe('migration', () => {
 
     expect(result.rows.map((row) => row.table_name)).toEqual([
       'approvals',
+      'auth_identities',
+      'auth_sessions',
       'dev_tokens',
       'events',
+      'invites',
+      'login_tokens',
       'memberships',
       'rules',
       'sessions',

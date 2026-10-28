@@ -7,6 +7,11 @@ export const ROLES = ['lead', 'developer'] as const;
 export const roleSchema = z.enum(ROLES);
 export type Role = z.infer<typeof roleSchema>;
 
+// Ways a person signs in to the dashboard. Passkeys are stored separately.
+export const AUTH_PROVIDERS = ['email', 'github', 'google'] as const;
+export const authProviderSchema = z.enum(AUTH_PROVIDERS);
+export type AuthProvider = z.infer<typeof authProviderSchema>;
+
 export const AGENTS = ['claude_code', 'codex'] as const;
 export const agentSchema = z.enum(AGENTS);
 export type Agent = z.infer<typeof agentSchema>;

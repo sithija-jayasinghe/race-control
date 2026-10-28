@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   AGENTS,
   APPROVAL_STATUSES,
+  AUTH_PROVIDERS,
   EVENT_DECISIONS,
   ROLES,
   RULE_ACTIONS,
@@ -9,6 +10,7 @@ import {
   SESSION_STATUSES,
   agentSchema,
   approvalStatusSchema,
+  authProviderSchema,
   eventDecisionSchema,
   roleSchema,
   ruleActionSchema,
@@ -18,6 +20,7 @@ import {
 
 const cases = [
   ['role', ROLES, roleSchema],
+  ['auth provider', AUTH_PROVIDERS, authProviderSchema],
   ['agent', AGENTS, agentSchema],
   ['session status', SESSION_STATUSES, sessionStatusSchema],
   ['event decision', EVENT_DECISIONS, eventDecisionSchema],

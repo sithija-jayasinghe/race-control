@@ -1,0 +1,1 @@
+CREATE INDEX "dev_tokens_team_user_idx" ON "dev_tokens" USING btree ("team_id","user_id");

@@ -84,10 +84,13 @@ You need Node 22 (see `.nvmrc`) and pnpm via Corepack:
 corepack enable
 git clone https://github.com/sithija-jayasinghe/race-control.git
 cd race-control
-cp .env.example .env
+cp .env.example .env    # then point DATABASE_URL at your Postgres
 pnpm install
+pnpm --filter @race-control/server db:migrate
 pnpm dev        # server on :4000, web app on :5173
 ```
+
+Any Postgres works: [Postgres.app](https://postgresapp.com) on a Mac, Docker, or a free Neon database. In development there's no email service, so **sign-in links are printed in the server's console**.
 
 | Command | What it does |
 |---|---|

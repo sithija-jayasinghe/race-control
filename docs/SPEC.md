@@ -146,8 +146,9 @@ Starter rules to seed every new team:
 
 - **Redact before storing.** Strip anything that looks like a secret (API keys, tokens, passwords, private keys) from `tool_input`, the same idea as errbuddy's sanitizer.
 - **Store metadata, not content.** Keep the command, file path, tool name and outcome. Don't store file contents or diffs in the MVP. Prompts (`UserPromptSubmit`) are not collected.
-- **Tokens:** generate random tokens, store only a hash, show the token once, and allow revoking.
-- **Team isolation:** every query is scoped by `teamId` from the authenticated token or session. Add tests that prove one team can't read another's data.
+- **Tokens:** generate random tokens, store only a hash, show the token once, and allow revoking. Developer tokens look like `rc_<43 chars>` so secret scanners and our own redaction can recognise them. A token belongs to one team; developers manage their own (up to 10 active), leads can see and revoke everyone's. Removing a member deletes their tokens. `last_used_at` is updated at most every 5 minutes.
+- **Team isolation:** every query is scoped by `teamId` from the authenticated token or session. Add tests that prove one team can't read another's data. In the API, a `:teamId` in the URL is only used after the user's membership is confirmed; teams you aren't in answer `404`, exactly like teams that don't exist.
+- **Invites** are reusable links that expire after 7 days and can be revoked by a lead. Like magic links, the token sits in the URL fragment and only its hash is stored. A team always keeps at least one lead.
 - **Rate limit** the ingest endpoints per token.
 - **Agent-to-agent text is untrusted.** Anything Race Control puts into an agent's context (Team Radio) could be used for prompt injection. Heads-ups are built by the server from stored metadata (who, which file, when, which agent), never from free text another agent wrote. Free-text notes (Phase 2) are length-limited, redacted, clearly labelled as information rather than instructions, and a lead can turn them off.
 
@@ -166,6 +167,13 @@ rules(id, team_id, name, tool, pattern, action: block|approve, mode: enforce|sha
       created_by, created_at)
 approvals(id, team_id, session_id, event_id, rule_id, status: pending|approved|denied|expired,
           requested_at, decided_at, decided_by)
+
+invites(id, team_id, token_hash, role, created_by, expires_at, revoked_at, created_at)
+
+-- Dashboard login (ADR 0002). Owned by people, not teams.
+auth_identities(id, user_id, provider: email|github|google, provider_user_id, email, created_at)
+login_tokens(id, email, token_hash, expires_at, used_at, created_at)        -- magic links
+auth_sessions(id, user_id, token_hash, expires_at, last_seen_at, created_at) -- login cookies
 ```
 
 - `sessions.agent_session_id` is the agent's own session id (Claude Code's `session_id`). It is unique per team and agent.
@@ -185,7 +193,7 @@ Index `events(team_id, created_at desc)`, `events(session_id, created_at)` and `
 | Server | Fastify + `@fastify/websocket` | Fast, typed, easy long-held requests for approvals |
 | Database | PostgreSQL (Neon free tier) + Drizzle ORM | Relational data with JSONB for event payloads |
 | Web | React + Vite + Tailwind CSS + TanStack Query | Fast dashboard, live updates via WebSocket |
-| Auth | Email magic link (or GitHub OAuth) for users; Bearer tokens for hooks | Simple and secure |
+| Auth | Users: magic link, then GitHub, Google and passkeys, all linked to one account ([ADR 0002](decisions/0002-dashboard-login.md)); a 30-day `httpOnly` cookie. Hooks: Bearer developer tokens | No passwords to store; developers sign in the way they already do |
 | Tests | Vitest, Fastify `inject` for HTTP, PGlite for database tests ([ADR 0001](decisions/0001-pglite-for-database-tests.md)); Playwright for one end-to-end flow | Confidence in the guardrail engine and team isolation |
 | Deploy | Server on Render or Fly.io, web on Vercel, Neon Postgres | Free or very cheap to run a demo |
 | CI | GitHub Actions: lint, type-check, test on every push | Same habits as errbuddy |
@@ -195,8 +203,10 @@ Index `events(team_id, created_at desc)`, `events(session_id, created_at)` and `
 **Week 1 — Foundations**
 - Monorepo, TypeScript config, lint, CI
 - Database schema and migrations (Drizzle), including `sessions.agent`, `events.target` and `rules.mode`
-- Auth, teams, invites, roles
+- Auth (magic link first), teams, invites, roles
 - Developer tokens: create, hash, show once, revoke
+- Web pages: sign in, create a team, members and invites, tokens
+- Sign in with GitHub and Google, then passkeys (may carry over into Week 2)
 
 **Week 2 — Ingestion**
 - `POST /hooks/:event` with Bearer auth, validation (zod) and secret redaction
