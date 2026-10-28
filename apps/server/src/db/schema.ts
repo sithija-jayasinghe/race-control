@@ -1,6 +1,7 @@
 import {
   AGENTS,
   APPROVAL_STATUSES,
+  AUTH_PROVIDERS,
   EVENT_DECISIONS,
   ROLES,
   RULE_ACTIONS,
@@ -36,6 +37,7 @@ export const eventDecisionEnum = pgEnum('event_decision', EVENT_DECISIONS);
 export const ruleActionEnum = pgEnum('rule_action', RULE_ACTIONS);
 export const ruleModeEnum = pgEnum('rule_mode', RULE_MODES);
 export const approvalStatusEnum = pgEnum('approval_status', APPROVAL_STATUSES);
+export const authProviderEnum = pgEnum('auth_provider', AUTH_PROVIDERS);
 
 const id = () => uuid('id').primaryKey().defaultRandom();
 const createdAt = () => timestamp('created_at', { withTimezone: true }).notNull().defaultNow();
@@ -206,4 +208,54 @@ export const approvals = pgTable(
     }).onDelete('cascade'),
     index('approvals_team_status_idx').on(t.teamId, t.status, t.requestedAt.desc()),
   ],
+);
+
+// Dashboard login (ADR 0002). These tables belong to people, not teams, so they have no `team_id`.
+// Every secret (magic link, login cookie) is stored only as a SHA-256 hash.
+
+export const authIdentities = pgTable(
+  'auth_identities',
+  {
+    id: id(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    provider: authProviderEnum('provider').notNull(),
+    // Lower-cased email for `email`; the provider's account id for GitHub and Google.
+    providerUserId: text('provider_user_id').notNull(),
+    email: text('email'),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique('auth_identities_provider_key').on(t.provider, t.providerUserId),
+    index('auth_identities_user_idx').on(t.userId),
+  ],
+);
+
+export const loginTokens = pgTable(
+  'login_tokens',
+  {
+    id: id(),
+    email: text('email').notNull(),
+    tokenHash: text('token_hash').notNull().unique(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    usedAt: timestamp('used_at', { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [index('login_tokens_email_created_idx').on(t.email, t.createdAt.desc())],
+);
+
+export const authSessions = pgTable(
+  'auth_sessions',
+  {
+    id: id(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    tokenHash: text('token_hash').notNull().unique(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull().defaultNow(),
+    createdAt: createdAt(),
+  },
+  (t) => [index('auth_sessions_user_idx').on(t.userId)],
 );

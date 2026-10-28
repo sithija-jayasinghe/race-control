@@ -166,6 +166,11 @@ rules(id, team_id, name, tool, pattern, action: block|approve, mode: enforce|sha
       created_by, created_at)
 approvals(id, team_id, session_id, event_id, rule_id, status: pending|approved|denied|expired,
           requested_at, decided_at, decided_by)
+
+-- Dashboard login (ADR 0002). Owned by people, not teams.
+auth_identities(id, user_id, provider: email|github|google, provider_user_id, email, created_at)
+login_tokens(id, email, token_hash, expires_at, used_at, created_at)        -- magic links
+auth_sessions(id, user_id, token_hash, expires_at, last_seen_at, created_at) -- login cookies
 ```
 
 - `sessions.agent_session_id` is the agent's own session id (Claude Code's `session_id`). It is unique per team and agent.
@@ -185,7 +190,7 @@ Index `events(team_id, created_at desc)`, `events(session_id, created_at)` and `
 | Server | Fastify + `@fastify/websocket` | Fast, typed, easy long-held requests for approvals |
 | Database | PostgreSQL (Neon free tier) + Drizzle ORM | Relational data with JSONB for event payloads |
 | Web | React + Vite + Tailwind CSS + TanStack Query | Fast dashboard, live updates via WebSocket |
-| Auth | Email magic link (or GitHub OAuth) for users; Bearer tokens for hooks | Simple and secure |
+| Auth | Users: magic link, then GitHub, Google and passkeys, all linked to one account ([ADR 0002](decisions/0002-dashboard-login.md)); a 30-day `httpOnly` cookie. Hooks: Bearer developer tokens | No passwords to store; developers sign in the way they already do |
 | Tests | Vitest, Fastify `inject` for HTTP, PGlite for database tests ([ADR 0001](decisions/0001-pglite-for-database-tests.md)); Playwright for one end-to-end flow | Confidence in the guardrail engine and team isolation |
 | Deploy | Server on Render or Fly.io, web on Vercel, Neon Postgres | Free or very cheap to run a demo |
 | CI | GitHub Actions: lint, type-check, test on every push | Same habits as errbuddy |
@@ -195,8 +200,10 @@ Index `events(team_id, created_at desc)`, `events(session_id, created_at)` and `
 **Week 1 — Foundations**
 - Monorepo, TypeScript config, lint, CI
 - Database schema and migrations (Drizzle), including `sessions.agent`, `events.target` and `rules.mode`
-- Auth, teams, invites, roles
+- Auth (magic link first), teams, invites, roles
 - Developer tokens: create, hash, show once, revoke
+- Web pages: sign in, create a team, members and invites, tokens
+- Sign in with GitHub and Google, then passkeys (may carry over into Week 2)
 
 **Week 2 — Ingestion**
 - `POST /hooks/:event` with Bearer auth, validation (zod) and secret redaction

@@ -1,17 +1,31 @@
 import { describe, expect, it } from 'vitest';
 import { loadEnv } from '../src/env.ts';
 
+const required = { DATABASE_URL: 'postgres://localhost/race_control' };
+
 describe('loadEnv', () => {
   it('applies defaults', () => {
-    expect(loadEnv({})).toEqual({ NODE_ENV: 'development', PORT: 4000, HOST: '127.0.0.1' });
+    expect(loadEnv(required)).toEqual({
+      ...required,
+      NODE_ENV: 'development',
+      PORT: 4000,
+      HOST: '127.0.0.1',
+      WEB_URL: 'http://localhost:5173',
+    });
+  });
+
+  it('requires DATABASE_URL', () => {
+    expect(() => loadEnv({})).toThrow('Invalid environment variables: DATABASE_URL');
   });
 
   it('parses PORT from a string', () => {
-    expect(loadEnv({ PORT: '5050' }).PORT).toBe(5050);
+    expect(loadEnv({ ...required, PORT: '5050' }).PORT).toBe(5050);
   });
 
   it('rejects an invalid PORT without echoing its value', () => {
-    expect(() => loadEnv({ PORT: 'secret-ish-value' })).toThrow('Invalid environment variables: PORT');
-    expect(() => loadEnv({ PORT: 'secret-ish-value' })).not.toThrow(/secret-ish-value/);
+    const env = { ...required, PORT: 'secret-ish-value' };
+
+    expect(() => loadEnv(env)).toThrow('Invalid environment variables: PORT');
+    expect(() => loadEnv(env)).not.toThrow(/secret-ish-value/);
   });
 });

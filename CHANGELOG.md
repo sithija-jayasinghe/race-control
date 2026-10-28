@@ -17,6 +17,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Database schema (Drizzle + Postgres) for teams, users, memberships, dev tokens, sessions, events, rules and approvals, with the first migration. Team-scoped foreign keys stop rows from referencing another team's data.
 - Database tests on an in-memory Postgres (PGlite), including team isolation tests.
 - README setup instructions.
+- Sign in with a magic link: single-use links that expire after 15 minutes, a 30-day login cookie, sign out, and `GET /me`. Login requests are rate-limited.
+- Server errors return a generic message and are logged without query text, parameters or other personal data.
+
+### Removed
+- `SESSION_SECRET` from `.env.example`. Login sessions are looked up by hash, so nothing needs signing.
 
 ### Changed
 - Spec: hook details updated against the current Claude Code docs (600 s default timeout, `onFailure`, `defer`, `additionalContext`).
