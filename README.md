@@ -35,6 +35,9 @@ In Formula 1, Race Control watches every car, enforces the rules and decides wha
 | ⚡ | **Zero install** | Developers paste a settings snippet. Claude Code's HTTP hooks send events directly, so there's nothing to install |
 | 🔒 | **Privacy first** | Secrets are redacted before storage. Commands and file paths are kept, but file contents and prompts are not |
 | 🎬 | **Simulator** | Replays realistic agent sessions, so the demo works without running real agents |
+| 📻 | **Team Radio** | Agents learn what other agents on the team are doing. If another agent just edited a file, yours gets a heads-up before touching it |
+| 🟨 | **Yellow flag** | Leads see when two developers' agents work on the same file at the same time |
+| 👻 | **Shadow mode** | Try a new rule safely: see what it would block before it blocks anyone |
 
 ## How it works
 
@@ -66,20 +69,31 @@ See [docs/SPEC.md](docs/SPEC.md) for the full design: data model, guardrail engi
 
 - [ ] **Week 1 — Foundations:** monorepo, database schema, auth, teams and developer tokens
 - [ ] **Week 2 — Ingestion:** hook endpoints, secret redaction, session tracking and the simulator
-- [ ] **Week 3 — Live dashboard:** WebSocket feed, team view and session timelines
-- [ ] **Week 4 — Guardrails and approvals:** rules engine, approval flow and mobile approval screen
+- [ ] **Week 3 — Live dashboard:** WebSocket feed, team view, session timelines, yellow flags and Team Radio heads-ups
+- [ ] **Week 4 — Guardrails and approvals:** rules engine with shadow mode, approval flow and mobile approval screen
 - [ ] **Week 5 — Real-world test:** a week of use with a real 10-developer team
 - [ ] **Week 6 — Launch:** deployment, public demo and write-up
 
 ## Getting started
 
-Setup instructions will be added once the first runnable version is in place (Week 2).
+Race Control is early: the server and web app run, but there are no features yet.
+
+You need Node 22 (see `.nvmrc`) and pnpm via Corepack:
 
 ```bash
+corepack enable
 git clone https://github.com/sithija-jayasinghe/race-control.git
 cd race-control
 cp .env.example .env
+pnpm install
+pnpm dev        # server on :4000, web app on :5173
 ```
+
+| Command | What it does |
+|---|---|
+| `pnpm lint` / `pnpm typecheck` / `pnpm test` | The checks CI runs. Tests need no database: they use an in-memory Postgres ([why](docs/decisions/0001-pglite-for-database-tests.md)) |
+| `pnpm --filter @race-control/server db:generate` | Create a new SQL migration after changing `apps/server/src/db/schema.ts` |
+| `pnpm --filter @race-control/server db:migrate` | Apply migrations to the Postgres in `DATABASE_URL` (Neon, Postgres.app or Docker) |
 
 ## Contributing
 
