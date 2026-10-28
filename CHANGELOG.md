@@ -11,6 +11,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Spec: Team Radio (agents get heads-ups about other agents' work), yellow flag collision alerts and shadow mode for rules.
 - pnpm monorepo with strict TypeScript, ESLint, Vitest and root `lint`, `typecheck` and `test` scripts.
 - `@race-control/shared` package with the shared value lists (roles, agents, statuses, decisions) and their zod schemas.
+- Server skeleton (Fastify) with `GET /health` and validated environment config.
+- Web app skeleton (React + Vite), with `/api` proxied to the server in development.
+- `pnpm dev` runs the server and web app together.
 
 ### Changed
 - Spec: hook details updated against the current Claude Code docs (600 s default timeout, `onFailure`, `defer`, `additionalContext`).
