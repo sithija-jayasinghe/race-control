@@ -19,6 +19,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - README setup instructions.
 - Sign in with a magic link: single-use links that expire after 15 minutes, a 30-day login cookie, sign out, and `GET /me`. Login requests are rate-limited.
 - Server errors return a generic message and are logged without query text, parameters or other personal data.
+- Teams: create a team (you become its lead), list members, change roles, remove members or leave. A team always keeps at least one lead.
+- Invite links: leads create reusable links for a role, valid for 7 days and revocable. Anyone with the link sees the team name, and joins after signing in.
+- Teams you aren't a member of are invisible: every team route answers 404, the same as for a team that doesn't exist.
 
 ### Removed
 - `SESSION_SECRET` from `.env.example`. Login sessions are looked up by hash, so nothing needs signing.

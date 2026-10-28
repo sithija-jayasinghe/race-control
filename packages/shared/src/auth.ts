@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { roleSchema } from './enums.ts';
+import { myTeamSchema } from './teams.ts';
 
 // Request and response bodies for the dashboard login API.
 
@@ -26,7 +26,7 @@ export type User = z.infer<typeof userSchema>;
 
 export const meResponseSchema = z.object({
   user: userSchema,
-  teams: z.array(z.object({ id: z.uuid(), name: z.string(), role: roleSchema })),
+  teams: z.array(myTeamSchema),
 });
 export type MeResponse = z.infer<typeof meResponseSchema>;
 

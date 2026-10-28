@@ -259,3 +259,21 @@ export const authSessions = pgTable(
   },
   (t) => [index('auth_sessions_user_idx').on(t.userId)],
 );
+
+// Invite links (SPEC section 3). Reusable until they expire or a lead revokes them.
+export const invites = pgTable(
+  'invites',
+  {
+    id: id(),
+    teamId: uuid('team_id')
+      .notNull()
+      .references(() => teams.id, { onDelete: 'cascade' }),
+    tokenHash: text('token_hash').notNull().unique(),
+    role: roleEnum('role').notNull(),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [index('invites_team_created_idx').on(t.teamId, t.createdAt.desc())],
+);

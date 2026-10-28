@@ -147,7 +147,8 @@ Starter rules to seed every new team:
 - **Redact before storing.** Strip anything that looks like a secret (API keys, tokens, passwords, private keys) from `tool_input`, the same idea as errbuddy's sanitizer.
 - **Store metadata, not content.** Keep the command, file path, tool name and outcome. Don't store file contents or diffs in the MVP. Prompts (`UserPromptSubmit`) are not collected.
 - **Tokens:** generate random tokens, store only a hash, show the token once, and allow revoking.
-- **Team isolation:** every query is scoped by `teamId` from the authenticated token or session. Add tests that prove one team can't read another's data.
+- **Team isolation:** every query is scoped by `teamId` from the authenticated token or session. Add tests that prove one team can't read another's data. In the API, a `:teamId` in the URL is only used after the user's membership is confirmed; teams you aren't in answer `404`, exactly like teams that don't exist.
+- **Invites** are reusable links that expire after 7 days and can be revoked by a lead. Like magic links, the token sits in the URL fragment and only its hash is stored. A team always keeps at least one lead.
 - **Rate limit** the ingest endpoints per token.
 - **Agent-to-agent text is untrusted.** Anything Race Control puts into an agent's context (Team Radio) could be used for prompt injection. Heads-ups are built by the server from stored metadata (who, which file, when, which agent), never from free text another agent wrote. Free-text notes (Phase 2) are length-limited, redacted, clearly labelled as information rather than instructions, and a lead can turn them off.
 
@@ -166,6 +167,8 @@ rules(id, team_id, name, tool, pattern, action: block|approve, mode: enforce|sha
       created_by, created_at)
 approvals(id, team_id, session_id, event_id, rule_id, status: pending|approved|denied|expired,
           requested_at, decided_at, decided_by)
+
+invites(id, team_id, token_hash, role, created_by, expires_at, revoked_at, created_at)
 
 -- Dashboard login (ADR 0002). Owned by people, not teams.
 auth_identities(id, user_id, provider: email|github|google, provider_user_id, email, created_at)

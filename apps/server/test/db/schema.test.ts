@@ -27,6 +27,7 @@ describe('migration', () => {
       'auth_sessions',
       'dev_tokens',
       'events',
+      'invites',
       'login_tokens',
       'memberships',
       'rules',

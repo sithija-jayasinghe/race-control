@@ -86,3 +86,47 @@ export async function signIn(t: TestApp, email: string): Promise<string> {
   if (response.statusCode !== 200 || !cookie) throw new Error(`sign-in failed: ${response.body}`);
   return cookie;
 }
+
+export type SignedInUser = {
+  id: string;
+  email: string;
+  cookie: string;
+  /** Sends a request as this user. */
+  request: (
+    method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
+    url: string,
+    payload?: object,
+  ) => Promise<LightMyRequestResponse>;
+};
+
+/** Signs in and returns a client that sends requests with the login cookie. */
+export async function signInAs(t: TestApp, email: string): Promise<SignedInUser> {
+  const cookie = await signIn(t, email);
+  const request: SignedInUser['request'] = (method, url, payload) =>
+    t.app.inject({ method, url, payload, cookies: { [SESSION_COOKIE]: cookie } });
+  const me = await request('GET', '/me');
+  const { user } = me.json<{ user: { id: string } }>();
+  return { id: user.id, email, cookie, request };
+}
+
+/** Creates a team through the API and returns its id. */
+export async function createTeamAs(user: SignedInUser, name: string): Promise<string> {
+  const response = await user.request('POST', '/teams', { name });
+  if (response.statusCode !== 201) throw new Error(`create team failed: ${response.body}`);
+  return response.json<{ id: string }>().id;
+}
+
+/** The token in an invite URL. */
+export function inviteToken(url: string): string {
+  const token = new URLSearchParams(new URL(url).hash.slice(1)).get('token');
+  if (!token) throw new Error('invite URL has no token');
+  return token;
+}
+
+/** Has `lead` invite `member` to the team with the given role, and accepts it. */
+export async function addMember(lead: SignedInUser, teamId: string, member: SignedInUser, role: 'lead' | 'developer') {
+  const created = await lead.request('POST', `/teams/${teamId}/invites`, { role });
+  const token = inviteToken(created.json<{ url: string }>().url);
+  const accepted = await member.request('POST', '/invites/accept', { token });
+  if (accepted.statusCode !== 200) throw new Error(`accept failed: ${accepted.body}`);
+}
