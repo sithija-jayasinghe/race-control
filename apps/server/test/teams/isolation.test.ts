@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import * as schema from '../../src/db/schema.ts';
+import { verifyDevToken } from '../../src/modules/tokens/service.ts';
 import { addMember, createTeamAs, createTestApp, signInAs, type SignedInUser, type TestApp } from '../helpers/app.ts';
 
 // Two teams, Alpha and Beta, each with a lead and a developer. Every team-scoped route is tried
@@ -13,16 +14,25 @@ let betaDev: SignedInUser;
 let alphaId: string;
 let betaId: string;
 let alphaInviteId: string;
+let alphaTokenId: string;
+let alphaToken: string;
 let snapshotBefore: unknown;
 
 /** Everything Alpha's lead can see about Alpha. */
 async function alphaSnapshot() {
-  const [team, members, invites] = await Promise.all([
+  const [team, members, invites, tokens] = await Promise.all([
     alphaLead.request('GET', `/teams/${alphaId}`),
     alphaLead.request('GET', `/teams/${alphaId}/members`),
     alphaLead.request('GET', `/teams/${alphaId}/invites`),
+    alphaLead.request('GET', `/teams/${alphaId}/tokens`),
   ]);
-  return { team: team.json<unknown>(), members: members.json<unknown>(), invites: invites.json<unknown>() };
+  return {
+    team: team.json<unknown>(),
+    members: members.json<unknown>(),
+    invites: invites.json<unknown>(),
+    // lastUsedAt moves when Alpha's own token is used in these tests, so it's left out.
+    tokens: tokens.json<Array<Record<string, unknown>>>().map(({ lastUsedAt: _, ...rest }) => rest),
+  };
 }
 
 beforeAll(async () => {
@@ -37,6 +47,8 @@ beforeAll(async () => {
   await addMember(betaLead, betaId, betaDev, 'developer');
   const invite = await alphaLead.request('POST', `/teams/${alphaId}/invites`, {});
   alphaInviteId = invite.json<{ id: string }>().id;
+  const token = await alphaDev.request('POST', `/teams/${alphaId}/tokens`, { label: 'laptop' });
+  ({ id: alphaTokenId, token: alphaToken } = token.json<{ id: string; token: string }>());
   snapshotBefore = await alphaSnapshot();
 });
 
@@ -54,6 +66,9 @@ const alphaRoutes: Case[] = [
   ['POST', () => `/teams/${alphaId}/invites`, {}],
   ['GET', () => `/teams/${alphaId}/invites`],
   ['DELETE', () => `/teams/${alphaId}/invites/${alphaInviteId}`],
+  ['POST', () => `/teams/${alphaId}/tokens`, { label: 'sneaky' }],
+  ['GET', () => `/teams/${alphaId}/tokens`],
+  ['DELETE', () => `/teams/${alphaId}/tokens/${alphaTokenId}`],
 ];
 
 describe("another team's lead", () => {
@@ -73,6 +88,21 @@ describe('cross-team ids inside your own team', () => {
 
   it("can't revoke another team's invite through their own team", async () => {
     expect((await betaLead.request('DELETE', `/teams/${betaId}/invites/${alphaInviteId}`)).statusCode).toBe(404);
+  });
+
+  it("can't revoke another team's token through their own team", async () => {
+    expect((await betaLead.request('DELETE', `/teams/${betaId}/tokens/${alphaTokenId}`)).statusCode).toBe(404);
+  });
+});
+
+describe('developer tokens', () => {
+  it("authenticate as the team they belong to, and don't appear in other teams", async () => {
+    expect(await verifyDevToken({ db: t.db, now: t.clock.now }, alphaToken)).toMatchObject({
+      teamId: alphaId,
+      userId: alphaDev.id,
+    });
+    const betaTokens = await betaLead.request('GET', `/teams/${betaId}/tokens`);
+    expect(betaTokens.json()).toEqual([]);
   });
 });
 

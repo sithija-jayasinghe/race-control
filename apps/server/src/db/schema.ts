@@ -94,6 +94,8 @@ export const devTokens = pgTable(
       columns: [t.teamId, t.userId],
       foreignColumns: [memberships.teamId, memberships.userId],
     }).onDelete('cascade'),
+    // Listing a team's or a member's tokens, and cascading member removal.
+    index('dev_tokens_team_user_idx').on(t.teamId, t.userId),
   ],
 );
 

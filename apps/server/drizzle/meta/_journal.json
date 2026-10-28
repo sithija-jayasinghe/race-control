@@ -22,6 +22,13 @@
       "when": 1793185038167,
       "tag": "0002_invites",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1793185411263,
+      "tag": "0003_dev_token_index",
+      "breakpoints": true
     }
   ]
 }

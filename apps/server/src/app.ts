@@ -8,6 +8,7 @@ import type { Mailer } from './lib/mailer.ts';
 import { authRoutes } from './modules/auth/routes.ts';
 import { inviteRoutes } from './modules/invites/routes.ts';
 import { teamRoutes } from './modules/teams/routes.ts';
+import { tokenRoutes } from './modules/tokens/routes.ts';
 import { registerAuth } from './plugins/auth.ts';
 import { registerTeamAccess } from './plugins/team-access.ts';
 
@@ -46,6 +47,7 @@ export async function buildApp({ logger, now = () => new Date(), ...rest }: Buil
   authRoutes(app, deps);
   teamRoutes(app, deps);
   inviteRoutes(app, deps);
+  tokenRoutes(app, deps);
 
   return app;
 }

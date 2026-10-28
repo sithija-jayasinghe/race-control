@@ -146,7 +146,7 @@ Starter rules to seed every new team:
 
 - **Redact before storing.** Strip anything that looks like a secret (API keys, tokens, passwords, private keys) from `tool_input`, the same idea as errbuddy's sanitizer.
 - **Store metadata, not content.** Keep the command, file path, tool name and outcome. Don't store file contents or diffs in the MVP. Prompts (`UserPromptSubmit`) are not collected.
-- **Tokens:** generate random tokens, store only a hash, show the token once, and allow revoking.
+- **Tokens:** generate random tokens, store only a hash, show the token once, and allow revoking. Developer tokens look like `rc_<43 chars>` so secret scanners and our own redaction can recognise them. A token belongs to one team; developers manage their own (up to 10 active), leads can see and revoke everyone's. Removing a member deletes their tokens. `last_used_at` is updated at most every 5 minutes.
 - **Team isolation:** every query is scoped by `teamId` from the authenticated token or session. Add tests that prove one team can't read another's data. In the API, a `:teamId` in the URL is only used after the user's membership is confirmed; teams you aren't in answer `404`, exactly like teams that don't exist.
 - **Invites** are reusable links that expire after 7 days and can be revoked by a lead. Like magic links, the token sits in the URL fragment and only its hash is stored. A team always keeps at least one lead.
 - **Rate limit** the ingest endpoints per token.
