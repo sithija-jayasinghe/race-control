@@ -170,7 +170,9 @@ approvals(id, team_id, session_id, event_id, rule_id, status: pending|approved|d
 
 - `sessions.agent_session_id` is the agent's own session id (Claude Code's `session_id`). It is unique per team and agent.
 - `events.type` is the hook event name. `events.target` is the normalised thing a tool acted on: a repo-relative file path for Edit and Write, the command for Bash. Guardrails, collisions and Team Radio all match on it.
-- Rows that belong to a team reference other team-owned rows through `(team_id, id)` foreign keys, so the database itself rejects, for example, an event that points at another team's session.
+- Rows that belong to a team reference other team-owned rows through `(team_id, id)` foreign keys, so the database itself rejects, for example, an event that points at another team's session. A dev token references `memberships(team_id, user_id)`, so it can only exist for a member of its team.
+- Deleting a team deletes all of its data. Removing a member deletes their dev tokens. Deleting a rule deletes its approvals (events keep their decision), so the rules UI should disable rules rather than delete them.
+- `users.email` is unique regardless of case.
 
 Index `events(team_id, created_at desc)`, `events(session_id, created_at)` and `events(team_id, target, created_at desc)` (for overlap lookups).
 
@@ -184,7 +186,7 @@ Index `events(team_id, created_at desc)`, `events(session_id, created_at)` and `
 | Database | PostgreSQL (Neon free tier) + Drizzle ORM | Relational data with JSONB for event payloads |
 | Web | React + Vite + Tailwind CSS + TanStack Query | Fast dashboard, live updates via WebSocket |
 | Auth | Email magic link (or GitHub OAuth) for users; Bearer tokens for hooks | Simple and secure |
-| Tests | Vitest + Supertest; Playwright for one end-to-end flow | Confidence in the guardrail engine and team isolation |
+| Tests | Vitest, Fastify `inject` for HTTP, PGlite for database tests ([ADR 0001](decisions/0001-pglite-for-database-tests.md)); Playwright for one end-to-end flow | Confidence in the guardrail engine and team isolation |
 | Deploy | Server on Render or Fly.io, web on Vercel, Neon Postgres | Free or very cheap to run a demo |
 | CI | GitHub Actions: lint, type-check, test on every push | Same habits as errbuddy |
 

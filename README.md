@@ -76,13 +76,24 @@ See [docs/SPEC.md](docs/SPEC.md) for the full design: data model, guardrail engi
 
 ## Getting started
 
-Setup instructions will be added once the first runnable version is in place (Week 2).
+Race Control is early: the server and web app run, but there are no features yet.
+
+You need Node 22 (see `.nvmrc`) and pnpm via Corepack:
 
 ```bash
+corepack enable
 git clone https://github.com/sithija-jayasinghe/race-control.git
 cd race-control
 cp .env.example .env
+pnpm install
+pnpm dev        # server on :4000, web app on :5173
 ```
+
+| Command | What it does |
+|---|---|
+| `pnpm lint` / `pnpm typecheck` / `pnpm test` | The checks CI runs. Tests need no database: they use an in-memory Postgres ([why](docs/decisions/0001-pglite-for-database-tests.md)) |
+| `pnpm --filter @race-control/server db:generate` | Create a new SQL migration after changing `apps/server/src/db/schema.ts` |
+| `pnpm --filter @race-control/server db:migrate` | Apply migrations to the Postgres in `DATABASE_URL` (Neon, Postgres.app or Docker) |
 
 ## Contributing
 
