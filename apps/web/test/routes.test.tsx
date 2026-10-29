@@ -42,8 +42,8 @@ describe('signed in', () => {
 
     renderApp('/');
 
-    expect(await screen.findByRole('heading', { name: "You're in" })).toBeInTheDocument();
-    expect(screen.getByText('lead@example.test')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Build your team' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Team name' })).toBeInTheDocument();
   });
 
   it('lets someone without a team sign out', async () => {

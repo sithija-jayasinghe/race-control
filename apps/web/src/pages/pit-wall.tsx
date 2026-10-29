@@ -33,8 +33,8 @@ export function PitWallPage() {
     <>
       <LightsOut />
       <AppShell
-        teamName={team.name}
-        basePath={`/t/${team.id}`}
+        team={team}
+        teams={me.teams}
         active="pit-wall"
         userEmail={me.user.email}
         counts={countByStatus(SAMPLE_DRIVERS)}

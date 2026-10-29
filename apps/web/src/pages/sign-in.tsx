@@ -17,6 +17,8 @@ function errorMessage(error: unknown): string {
 export const primaryButton =
   'h-11 w-full rounded-xl bg-foreground font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-50';
 export const quietButton = 'h-10 rounded-xl px-3 text-sm text-muted-foreground hover:bg-white/5 hover:text-foreground';
+export const inputClass =
+  'h-11 w-full rounded-xl border border-input bg-black/20 px-3.5 text-base outline-none placeholder:text-muted-foreground/60 focus:border-ring aria-invalid:border-flag-red';
 
 export function SignInPage() {
   const request = useRequestMagicLink();
@@ -62,6 +64,13 @@ export function SignInPage() {
               expires in 15 minutes.
             </p>
           </div>
+          {import.meta.env.DEV && (
+            <p className="rounded-xl border border-flag-yellow/30 bg-flag-yellow/5 p-3 text-sm text-muted-foreground">
+              <span className="font-medium text-foreground">Development mode:</span> no email is sent. The link is
+              printed in the terminal running <code className="font-mono text-xs">pnpm dev</code>, after{' '}
+              <code className="font-mono text-xs">[dev mailer]</code>.
+            </p>
+          )}
           {request.isError && (
             <p role="alert" className="text-sm text-flag-red">
               {errorMessage(request.error)}
@@ -109,7 +118,7 @@ export function SignInPage() {
               setEmail(e.target.value);
               setInputError(undefined);
             }}
-            className="h-11 w-full rounded-xl border border-input bg-black/20 px-3.5 text-base outline-none placeholder:text-muted-foreground/60 focus:border-ring aria-invalid:border-flag-red"
+            className={inputClass}
           />
           {inputError && (
             <p id="email-error" className="text-sm text-flag-red">

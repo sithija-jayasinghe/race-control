@@ -25,6 +25,15 @@ describe('sign-in page', () => {
     expect(screen.getByRole('button', { name: /Send again in \d+s/ })).toBeDisabled();
   });
 
+  it('says where the link really is in development, where no email is sent', async () => {
+    fakeServer();
+    renderApp('/sign-in');
+
+    await typeAndSend('dev@example.test');
+
+    expect(await screen.findByText(/no email is sent/)).toHaveTextContent('[dev mailer]');
+  });
+
   it('checks the email before sending anything', async () => {
     const server = fakeServer();
     renderApp('/sign-in');

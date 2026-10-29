@@ -3,9 +3,11 @@ import { Navigate, Outlet, useLocation, useOutletContext, useParams, type RouteO
 import { FullScreen } from '@/components/full-screen';
 import { StartLights } from '@/components/start-lights';
 import { rememberNextPath, useMe } from '@/lib/auth';
+import { InvitePage } from '@/pages/invite';
 import { PitWallPage } from '@/pages/pit-wall';
 import { SignInPage } from '@/pages/sign-in';
 import { StartPage } from '@/pages/start';
+import { TeamPage } from '@/pages/team';
 import { VerifyPage } from '@/pages/verify';
 
 type SignedInContext = { me: MeResponse };
@@ -92,6 +94,7 @@ function SignInRoute() {
 export const routes: RouteObject[] = [
   { path: '/sign-in', element: <SignInRoute /> },
   { path: '/auth/verify', element: <VerifyPage /> },
+  { path: '/invite', element: <InvitePage /> },
   {
     element: <RequireSignIn />,
     children: [
@@ -100,7 +103,10 @@ export const routes: RouteObject[] = [
       {
         path: '/t/:teamId',
         element: <TeamLayout />,
-        children: [{ index: true, element: <PitWallPage /> }],
+        children: [
+          { index: true, element: <PitWallPage /> },
+          { path: 'team', element: <TeamPage /> },
+        ],
       },
     ],
   },
