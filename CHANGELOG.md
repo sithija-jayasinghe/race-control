@@ -23,6 +23,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Invite links: leads create reusable links for a role, valid for 7 days and revocable. Anyone with the link sees the team name, and joins after signing in.
 - Teams you aren't a member of are invisible: every team route answers 404, the same as for a team that doesn't exist.
 - Developer tokens: create a `rc_…` token for your agent hooks (shown once, stored as a hash), list and revoke them. Leads can see and revoke every token in their team.
+- UI design (`docs/design/UI.md`): an F1 broadcast of your agents, dark first, with floating glass panels over a 3D track scene. Includes the interactive Pit wall prototype the direction came from.
+- Web app design system in that style: the Race / Control wordmark, a lights-out start (once per session, skipped with reduced motion), an F1 TV-style timing tower, Race Control flag banners, Team Radio cards, a LIVE session clock, and status flags that always pair colour with a word. Icon rail on desktop, floating tab bar on phones. Dark by default, with light and system themes.
+- Sign-in pages: enter your email, check your inbox, open the link and you're in. The link's token is removed from the address bar straight away, and after signing in you return to the page you were trying to open. Account menu with theme choice and sign out.
+- Signed-out visitors are sent to sign in; signed-in visitors land on their first team's Pit wall, or a first-run page if they're not on a team yet.
+- Create a team from the first-run page or the team switcher in the top bar.
+- Invite page: open an invite link to see the team and your role, sign in if needed (you come straight back), and join.
+- Team page: members and roles; leads can change roles, remove members (with a confirm step) and create, copy and revoke invite links. Anyone can leave a team, and the last lead is told why they can't step down.
+- Settings page: create agent tokens (shown once, with copy buttons for the token and the `export RACE_CONTROL_TOKEN=…` line), see when each was last used, and revoke them. Leads see everyone's tokens. Theme choice.
+- The Pit wall now starts as an empty track ("No cars on track") with the steps to connect an agent, and a "Watch a demo race" mode with sample drivers.
 
 ### Removed
 - `SESSION_SECRET` from `.env.example`. Login sessions are looked up by hash, so nothing needs signing.
