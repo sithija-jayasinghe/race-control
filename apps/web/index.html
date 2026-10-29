@@ -4,6 +4,15 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Race Control</title>
+    <script>
+      // Apply the theme before the first paint, so dark mode doesn't flash white. Mirrors src/lib/theme.tsx.
+      (function () {
+        var saved = null;
+        try { saved = localStorage.getItem('rc-theme'); } catch (e) {}
+        var dark = saved !== 'light' && (saved !== 'system' || window.matchMedia('(prefers-color-scheme: dark)').matches);
+        if (dark) document.documentElement.classList.add('dark');
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

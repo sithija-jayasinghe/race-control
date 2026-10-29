@@ -1,10 +1,13 @@
-import react from '@vitejs/plugin-react';
-import { defineProject } from 'vitest/config';
+import { defineProject, mergeConfig } from 'vitest/config';
+import viteConfig from './vite.config.ts';
 
-export default defineProject({
-  plugins: [react()],
-  test: {
-    name: 'web',
-    environment: 'node',
-  },
-});
+export default mergeConfig(
+  viteConfig,
+  defineProject({
+    test: {
+      name: 'web',
+      environment: 'jsdom',
+      setupFiles: ['./test/setup.ts'],
+    },
+  }),
+);

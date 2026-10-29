@@ -1,0 +1,626 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Race Control: Pit wall prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300..600&family=Geist+Mono:wght@400;500&family=Titillium+Web:ital,wght@0,600;0,700;0,900;1,700;1,900&display=swap" rel="stylesheet" />
+<style>
+  /* F1 broadcast layer */
+  :root { --f1: #e10600; --purple: #b66dff; --display: 'Titillium Web', 'Geist', sans-serif; }
+  .kerb { height: 3px; background: repeating-linear-gradient(90deg, var(--f1) 0 14px, #f2f2f2 14px 28px); }
+  .brand { display: flex; align-items: center; gap: 12px; padding: 6px 12px 6px 8px; border-radius: 12px; }
+  .brand .logo { font-family: var(--display); font-weight: 900; font-style: italic; font-size: 19px; letter-spacing: .02em; text-transform: uppercase; line-height: 1; }
+  .brand .logo i { color: var(--f1); font-style: italic; }
+  .brand .chk { width: 26px; height: 18px; transform: skewX(-14deg); background: conic-gradient(#fff 0 25%, #0b0c0f 0 50%, #fff 0 75%, #0b0c0f 0) 0 0 / 9px 9px; border-radius: 2px; }
+  .teamchip { font-size: 12px; color: var(--dim); padding: 3px 8px; border-radius: 7px; border: 1px solid var(--line); }
+  .clock { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 12px; font-family: var(--display); font-weight: 700; font-size: 14px; letter-spacing: .06em; }
+  .clock .live { color: #fff; background: var(--f1); padding: 1px 7px; border-radius: 4px; font-size: 12px; font-style: italic; }
+  .clock .t { font-family: var(--mono); font-weight: 500; font-size: 13px; letter-spacing: 0; color: var(--text); }
+  .right { display: flex; gap: 8px; align-items: center; }
+
+  .tower { position: fixed; top: 72px; left: 84px; width: 268px; border-radius: 14px; overflow: hidden; }
+  .tower .th { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; font-family: var(--display); font-weight: 900; font-style: italic; text-transform: uppercase; font-size: 13px; letter-spacing: .06em; background: rgba(0,0,0,.35); }
+  .tower .th span:last-child { color: var(--dim); font-weight: 700; font-family: var(--mono); font-style: normal; font-size: 11px; letter-spacing: 0; }
+  .trow { display: grid; grid-template-columns: 26px 4px 1fr auto 40px; align-items: center; gap: 9px; height: 38px; padding: 0 12px 0 10px; border-top: 1px solid rgba(255,255,255,.05); background: transparent; border-left: 0; border-right: 0; border-bottom: 0; width: 100%; text-align: left; transition: background .2s, transform .5s cubic-bezier(.2,.8,.2,1); }
+  .trow:hover, .trow.sel { background: rgba(255,255,255,.06); }
+  .trow .pos { font-family: var(--display); font-weight: 900; font-style: italic; font-size: 15px; text-align: center; }
+  .trow .bar { width: 4px; height: 20px; border-radius: 2px; background: var(--c); box-shadow: 0 0 10px var(--c); }
+  .trow .code { font-family: var(--display); font-weight: 700; font-size: 15px; letter-spacing: .05em; }
+  .trow .code small { font-family: var(--mono); font-weight: 400; font-size: 10px; color: var(--faint); letter-spacing: 0; margin-left: 6px; }
+  .trow .sectors { display: flex; gap: 2px; }
+  .trow .sectors i { width: 10px; height: 4px; border-radius: 1px; background: rgba(255,255,255,.12); }
+  .trow .gap { font-family: var(--mono); font-size: 12px; color: var(--dim); text-align: right; }
+
+  .rc { position: fixed; top: 72px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; align-items: center; pointer-events: none; }
+  .rcmsg { display: flex; align-items: stretch; border-radius: 6px; overflow: hidden; background: rgba(8,9,12,.92); border: 1px solid var(--line); box-shadow: 0 16px 40px rgba(0,0,0,.5); animation: slam .45s cubic-bezier(.2,.9,.2,1); font-family: var(--display); }
+  .rcmsg .tag { background: var(--c); color: #0b0c0f; font-weight: 900; font-style: italic; text-transform: uppercase; font-size: 12px; letter-spacing: .08em; padding: 7px 10px; display: flex; align-items: center; }
+  .rcmsg .src { padding: 7px 10px; font-weight: 700; font-size: 12px; letter-spacing: .1em; color: var(--dim); border-right: 1px solid var(--line); display: flex; align-items: center; }
+  .rcmsg .body { padding: 7px 12px; font-weight: 700; font-size: 14px; letter-spacing: .03em; text-transform: uppercase; display: flex; align-items: center; gap: 10px; }
+  .rcmsg .body .mono { text-transform: none; font-size: 12px; color: var(--dim); letter-spacing: 0; font-weight: 400; }
+  @keyframes slam { from { opacity: 0; transform: translateX(-30px) skewX(-8deg); } }
+
+  .radio { position: fixed; left: 50%; bottom: 22px; transform: translate(-50%, 160%); width: 360px; border-radius: 14px; padding: 12px 14px; display: flex; gap: 12px; align-items: center; transition: transform .45s cubic-bezier(.2,.8,.2,1); }
+  .radio.open { transform: translate(-50%, 0); }
+  .radio .who { font-family: var(--display); font-weight: 900; font-style: italic; text-transform: uppercase; font-size: 13px; letter-spacing: .06em; }
+  .radio .who small { color: var(--f1); margin-right: 6px; }
+  .radio .q { font-size: 13px; color: var(--dim); margin-top: 2px; }
+  .wave { display: flex; gap: 2px; align-items: center; height: 28px; }
+  .wave i { width: 3px; border-radius: 2px; background: var(--text); animation: wv .9s ease-in-out infinite; }
+  @keyframes wv { 0%, 100% { height: 4px; opacity: .5; } 50% { height: 24px; opacity: 1; } }
+
+  .lights { position: fixed; inset: 0; background: #050608; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px; z-index: 50; transition: opacity .6s ease; }
+  .lights.gone { opacity: 0; pointer-events: none; }
+  .gantry { display: flex; gap: 18px; padding: 18px 22px; border-radius: 14px; background: #0d0f13; border: 1px solid var(--line); }
+  .pod { display: flex; flex-direction: column; gap: 10px; padding: 10px; border-radius: 10px; background: #08090b; }
+  .lamp { width: 34px; height: 34px; border-radius: 50%; background: #1a0b0b; transition: background .08s, box-shadow .08s; }
+  .pod.on .lamp { background: var(--f1); box-shadow: 0 0 22px var(--f1), 0 0 60px rgba(225,6,0,.5); }
+  .lights .word { font-family: var(--display); font-weight: 900; font-style: italic; font-size: 34px; letter-spacing: .08em; text-transform: uppercase; opacity: 0; transition: opacity .2s; }
+  .lights .word.show { opacity: 1; }
+  .lights small { color: var(--faint); font-family: var(--mono); font-size: 11px; }
+
+  :root {
+    --bg: #06070a;
+    --glass: rgba(16, 18, 23, 0.58);
+    --glass-strong: rgba(20, 22, 28, 0.78);
+    --line: rgba(255, 255, 255, 0.08);
+    --line-strong: rgba(255, 255, 255, 0.14);
+    --text: #eceef2;
+    --dim: #8b909a;
+    --faint: #5a5f69;
+    --green: #3ddc84;
+    --yellow: #ffc53d;
+    --blue: #4c9aff;
+    --red: #ff5a5f;
+    --idle: #8a8f98;
+    --mono: 'Geist Mono', ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: 'Geist', system-ui, sans-serif; overflow: hidden; -webkit-font-smoothing: antialiased; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  .vignette { position: fixed; inset: 0; pointer-events: none; background: radial-gradient(120% 90% at 50% 45%, transparent 55%, rgba(0,0,0,.65) 100%); }
+  .glass { background: var(--glass); backdrop-filter: blur(18px) saturate(150%); -webkit-backdrop-filter: blur(18px) saturate(150%); border: 1px solid var(--line); box-shadow: inset 0 1px 0 rgba(255,255,255,.05), 0 20px 50px rgba(0,0,0,.35); }
+  .mono { font-family: var(--mono); }
+  button { font: inherit; color: inherit; cursor: pointer; }
+
+  /* top bar */
+  .top { position: fixed; top: 16px; left: 84px; right: 16px; display: flex; align-items: center; justify-content: space-between; pointer-events: none; }
+  .top > * { pointer-events: auto; }
+  .team { display: flex; align-items: center; gap: 10px; padding: 7px 12px 7px 8px; border-radius: 12px; }
+  .mark { width: 22px; height: 22px; border-radius: 6px; background: conic-gradient(from 45deg, #fff 0 25%, #111 0 50%, #fff 0 75%, #111 0); opacity: .9; }
+  .team span { font-size: 14px; font-weight: 500; }
+  .team small { color: var(--dim); font-size: 12px; }
+  .stats { display: flex; gap: 14px; padding: 8px 14px; border-radius: 999px; font-size: 13px; }
+  .stat { display: flex; align-items: center; gap: 6px; color: var(--dim); }
+  .stat b { color: var(--text); font-weight: 500; font-variant-numeric: tabular-nums; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; box-shadow: 0 0 10px currentColor; background: currentColor; }
+  .kbar { display: flex; align-items: center; gap: 10px; padding: 7px 8px 7px 12px; border-radius: 12px; color: var(--dim); font-size: 13px; background: var(--glass); }
+  .kbar kbd { font-family: var(--mono); font-size: 11px; padding: 2px 6px; border-radius: 6px; border: 1px solid var(--line-strong); color: var(--text); }
+
+  /* rail */
+  .rail { position: fixed; left: 16px; top: 16px; bottom: 16px; width: 52px; border-radius: 16px; display: flex; flex-direction: column; align-items: center; padding: 10px 0; gap: 6px; }
+  .rail a { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; color: var(--faint); position: relative; }
+  .rail a:hover { color: var(--text); background: rgba(255,255,255,.05); }
+  .rail a.on { color: var(--text); background: rgba(255,255,255,.08); }
+  .rail a .badge { position: absolute; top: 4px; right: 4px; width: 8px; height: 8px; border-radius: 50%; background: var(--blue); box-shadow: 0 0 8px var(--blue); }
+  .rail a[data-tip]:hover::after { content: attr(data-tip); position: absolute; left: 46px; white-space: nowrap; font-size: 12px; padding: 5px 8px; border-radius: 8px; background: var(--glass-strong); border: 1px solid var(--line); color: var(--text); }
+  .rail .spacer { flex: 1; }
+  .rail svg { width: 18px; height: 18px; }
+
+  /* dock */
+  .dock { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); display: flex; gap: 6px; padding: 8px; border-radius: 18px; }
+  .chip { display: flex; align-items: center; gap: 0; height: 40px; padding: 0 4px; border-radius: 12px; border: 1px solid transparent; background: transparent; transition: background .2s, gap .25s; }
+  .chip:hover, .chip.sel { background: rgba(255,255,255,.06); border-color: var(--line); gap: 10px; }
+  .ava { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 500; background: #1b1e25; position: relative; }
+  .ava::after { content: ''; position: absolute; inset: -3px; border-radius: 50%; border: 2px solid var(--c); box-shadow: 0 0 12px var(--c); opacity: .9; }
+  .chip .act { max-width: 0; overflow: hidden; white-space: nowrap; font-size: 12px; color: var(--dim); transition: max-width .3s ease; font-family: var(--mono); }
+  .chip:hover .act, .chip.sel .act { max-width: 220px; padding-right: 8px; }
+
+  /* drawer */
+  .drawer { position: fixed; top: 72px; right: 16px; bottom: 84px; width: 340px; border-radius: 18px; padding: 16px; display: flex; flex-direction: column; gap: 14px; transform: translateX(calc(100% + 24px)); transition: transform .45s cubic-bezier(.2,.8,.2,1); }
+  .drawer.open { transform: none; }
+  .dh { display: flex; align-items: center; gap: 12px; }
+  .dh .ava { width: 40px; height: 40px; font-size: 13px; }
+  .dh h2 { margin: 0; font-size: 16px; font-weight: 500; }
+  .dh p { margin: 2px 0 0; color: var(--dim); font-size: 12px; }
+  .dh .x { margin-left: auto; background: none; border: 0; color: var(--dim); font-size: 18px; }
+  .now { padding: 12px; border-radius: 12px; background: rgba(255,255,255,.03); border: 1px solid var(--line); font-size: 13px; }
+  .now .mono { color: var(--text); }
+  .stream { flex: 1; overflow: hidden; font-family: var(--mono); font-size: 12px; line-height: 1.75; color: var(--dim); mask-image: linear-gradient(to bottom, transparent, #000 18%); display: flex; flex-direction: column; justify-content: flex-end; }
+  .stream div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; animation: in .35s ease; }
+  .stream .t { color: var(--faint); margin-right: 8px; }
+  .stream .hl { color: var(--yellow); }
+  .stream .bad { color: var(--red); }
+  @keyframes in { from { opacity: 0; transform: translateY(6px); } }
+  .row { display: flex; gap: 8px; }
+  .btn { flex: 1; height: 36px; border-radius: 10px; border: 1px solid var(--line-strong); background: rgba(255,255,255,.04); font-size: 13px; }
+  .btn:hover { background: rgba(255,255,255,.08); }
+
+  /* approval */
+  .approval { position: fixed; left: 84px; bottom: 18px; width: 320px; border-radius: 18px; padding: 14px; transform: translateY(140%); transition: transform .5s cubic-bezier(.2,.8,.2,1); border-color: rgba(76,154,255,.35); }
+  .approval.open { transform: none; }
+  .approval .head { display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--blue); }
+  .approval .what { margin: 10px 0 4px; font-size: 14px; }
+  .approval .path { font-family: var(--mono); font-size: 12px; padding: 8px 10px; border-radius: 10px; background: rgba(0,0,0,.35); border: 1px solid var(--line); color: var(--text); }
+  .approval .bar { height: 2px; border-radius: 2px; background: var(--line); margin: 12px 0; overflow: hidden; }
+  .approval .bar i { display: block; height: 100%; background: var(--blue); width: 100%; transition: width 1s linear; }
+  .approve { background: var(--text); color: #0b0c0f; border-color: transparent; font-weight: 500; }
+  .approve:hover { background: #fff; }
+
+  /* toasts */
+  .toasts { position: fixed; top: 72px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; align-items: center; pointer-events: none; }
+  .toast { display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px; font-size: 13px; animation: drop .4s cubic-bezier(.2,.8,.2,1); }
+  .toast .mono { color: var(--dim); font-size: 12px; }
+  @keyframes drop { from { opacity: 0; transform: translateY(-10px) scale(.96); } }
+
+  /* hover tip */
+  .tip { position: fixed; pointer-events: none; padding: 6px 10px; border-radius: 10px; font-size: 12px; opacity: 0; transition: opacity .15s; white-space: nowrap; }
+  .tip.show { opacity: 1; }
+
+  /* palette */
+  .scrim { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: none; align-items: flex-start; justify-content: center; padding-top: 14vh; }
+  .scrim.open { display: flex; }
+  .palette { width: min(560px, 92vw); border-radius: 18px; overflow: hidden; background: var(--glass-strong); }
+  .palette input { width: 100%; border: 0; outline: 0; background: transparent; color: var(--text); font: inherit; font-size: 16px; padding: 16px 18px; border-bottom: 1px solid var(--line); }
+  .palette .item { display: flex; align-items: center; gap: 12px; padding: 10px 18px; font-size: 14px; color: var(--dim); }
+  .palette .item:first-of-type { color: var(--text); background: rgba(255,255,255,.05); }
+  .palette .item kbd { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--faint); }
+</style>
+</head>
+<body>
+<canvas id="scene" aria-label="Live map of the team's agents moving through the codebase"></canvas>
+<div class="vignette"></div>
+
+<nav class="rail glass" aria-label="Main">
+  <a class="on" data-tip="Pit wall" href="#" aria-label="Pit wall"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="13" r="8"/><path d="M12 13l4-4"/><path d="M12 5V3"/></svg></a>
+  <a data-tip="Sessions" href="#" aria-label="Sessions"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 6h16M4 12h10M4 18h7"/></svg></a>
+  <a data-tip="Approvals" href="#" aria-label="Approvals"><span class="badge" id="railBadge"></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11V7a2 2 0 0 0-4 0v3M14 10V5a2 2 0 0 0-4 0v5M10 10V6a2 2 0 0 0-4 0v8a8 8 0 0 0 16 0v-3a2 2 0 0 0-4 0"/></svg></a>
+  <a data-tip="Rules" href="#" aria-label="Rules"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg></a>
+  <a data-tip="Team" href="#" aria-label="Team"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.5 3.4-5.5 6.5-5.5s5.7 2 6.5 5.5M16 4.5a3.5 3.5 0 0 1 0 7M18 14.8c1.8.7 3 2.5 3.5 5.2"/></svg></a>
+  <div class="spacer"></div>
+  <a data-tip="Settings" href="#" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg></a>
+</nav>
+
+<div class="lights" id="lights" aria-hidden="true">
+  <div class="gantry"><div class="pod"><div class="lamp"></div><div class="lamp"></div></div><div class="pod"><div class="lamp"></div><div class="lamp"></div></div><div class="pod"><div class="lamp"></div><div class="lamp"></div></div><div class="pod"><div class="lamp"></div><div class="lamp"></div></div><div class="pod"><div class="lamp"></div><div class="lamp"></div></div></div>
+  <div class="word" id="lightsWord">Lights out</div>
+  <small>click to skip</small>
+</div>
+
+<header class="top">
+  <div class="brand glass"><div class="chk" aria-hidden="true"></div><span class="logo">Race <i>/</i> Control</span><span class="teamchip">BuildFlow ▾</span></div>
+  <div class="stats glass" aria-label="Team status">
+    <span class="stat" title="Working" style="color:var(--green)"><span class="dot"></span><b id="sWork">0</b></span>
+    <span class="stat" title="Yellow flags" style="color:var(--yellow)"><span class="dot"></span><b id="sYellow">0</b></span>
+    <span class="stat" title="Waiting for approval" style="color:var(--blue)"><span class="dot"></span><b id="sWait">0</b></span>
+    <span class="stat" title="Blocked" style="color:var(--red)"><span class="dot"></span><b id="sBlock">0</b></span>
+  </div>
+  <div class="right">
+    <div class="clock glass"><span class="live">LIVE</span><span class="t" id="clock">00:00:00</span></div>
+    <button class="kbar glass" id="openPalette" aria-label="Search and commands">Jump to anything <kbd>⌘K</kbd></button>
+  </div>
+</header>
+
+<aside class="tower glass" aria-label="Timing tower">
+  <div class="th"><span>Pit wall</span><span id="lap">LAP 0</span></div>
+  <div class="kerb"></div>
+  <div id="towerRows"></div>
+</aside>
+
+<div class="rc" id="rc" aria-live="polite"></div>
+
+<div class="radio glass" id="radio" aria-live="polite">
+  <div class="wave" aria-hidden="true"><i style="animation-delay:-.1s"></i><i style="animation-delay:-.5s"></i><i style="animation-delay:-.3s"></i><i style="animation-delay:-.7s"></i><i style="animation-delay:-.2s"></i><i style="animation-delay:-.6s"></i><i style="animation-delay:-.4s"></i></div>
+  <div><div class="who"><small>Team radio</small><span id="radioWho"></span></div><div class="q" id="radioQ"></div></div>
+</div>
+
+<aside class="drawer glass" id="drawer" aria-label="Agent details">
+  <div class="dh"><div class="ava" id="dAva"></div><div><h2 id="dName"></h2><p class="mono" id="dMeta"></p></div><button class="x" id="dClose" aria-label="Close">×</button></div>
+  <div class="now"><div style="color:var(--dim);font-size:12px;margin-bottom:6px" id="dState"></div><div class="mono" id="dNow"></div></div>
+  <div class="stream" id="dStream"></div>
+  <div class="row"><button class="btn">Open session</button><button class="btn">Radio</button></div>
+</aside>
+
+<section class="approval glass" id="approval" aria-label="Approval needed">
+  <div class="kerb" style="margin:-14px -14px 12px;background:repeating-linear-gradient(90deg,var(--blue) 0 14px,#f2f2f2 14px 28px)"></div>
+  <div class="head"><span>● Approval needed</span><span class="mono" id="aTime">3:59</span></div>
+  <div class="what"><b style="font-weight:500" id="aWho">AM</b> wants to edit</div>
+  <div class="path" id="aPath">db/migrations/0042_users.sql</div>
+  <div class="bar"><i id="aBar"></i></div>
+  <div class="row"><button class="btn" id="deny">Deny</button><button class="btn approve" id="approve">Approve</button></div>
+</section>
+
+<div class="tip glass" id="tip"></div>
+
+<div class="scrim" id="scrim">
+  <div class="palette glass" role="dialog" aria-label="Command palette">
+    <input placeholder="Jump to an agent, file or rule…" />
+    <div class="item">◎ Follow Nimal's agent <kbd>↵</kbd></div>
+    <div class="item">⚑ Rules: never touch .env</div>
+    <div class="item">✋ Approvals (1 waiting)</div>
+    <div class="item">＋ Invite a teammate</div>
+  </div>
+</div>
+
+<script>
+const COLORS = { working: '#3ddc84', yellow: '#ffc53d', waiting: '#4c9aff', blocked: '#ff5a5f', idle: '#8a8f98' };
+let hover = null, selected = null, last = performance.now();
+const canvas = document.getElementById('scene');
+const ctx = canvas.getContext('2d');
+let W, H, DPR;
+function resize() { DPR = Math.min(devicePixelRatio || 1, 2); W = innerWidth; H = innerHeight; canvas.width = W * DPR; canvas.height = H * DPR; ctx.setTransform(DPR, 0, 0, DPR, 0, 0); }
+addEventListener('resize', resize); resize();
+
+// The codebase: folders are clusters of file nodes in 3D space.
+const clusters = [
+  { name: 'api', hue: '#7c8cff', files: ['routes.ts', 'hooks.ts', 'server.ts', 'env.ts', 'errors.ts', 'app.ts'] },
+  { name: 'auth', hue: '#b57cff', files: ['session.ts', 'token.ts', 'magic-link.ts', 'cookies.ts', 'repo.ts'] },
+  { name: 'db/migrations', hue: '#4fd1e8', files: ['0040_rules.sql', '0041_events.sql', '0042_users.sql', 'schema.ts'] },
+  { name: 'web/src', hue: '#6ea8ff', files: ['App.tsx', 'pit-wall.tsx', 'dock.tsx', 'theme.ts', 'api.ts', 'routes.tsx', 'drawer.tsx'] },
+  { name: 'hooks', hue: '#e07cff', files: ['pre-tool-use.ts', 'post-tool-use.ts', 'redact.ts', '.env'] },
+];
+const dust = Array.from({ length: 220 }, () => ({ x: (Math.random() - 0.5) * 1400, y: (Math.random() - 0.5) * 500 - 40, z: (Math.random() - 0.5) * 1400, v: 0.02 + Math.random() * 0.05 }));
+let seed = 7; const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+const nodes = [];
+clusters.forEach((c, i) => {
+  const a = (i / clusters.length) * Math.PI * 2;
+  c.center = { x: Math.cos(a) * 290, y: (rand() - 0.5) * 90, z: Math.sin(a) * 290 };
+  c.nodes = c.files.map((f) => {
+    const t = rand() * Math.PI * 2, p = Math.acos(2 * rand() - 1), r = 60 + rand() * 45;
+    const n = { path: `${c.name}/${f}`, cluster: c, x: c.center.x + r * Math.sin(p) * Math.cos(t), y: c.center.y + r * Math.cos(p) * 0.7, z: c.center.z + r * Math.sin(p) * Math.sin(t), heat: 0 };
+    nodes.push(n); return n;
+  });
+});
+const nodeByPath = (p) => nodes.find((n) => n.path === p);
+
+// Agents.
+const agents = [
+  { id: 'NIM', name: 'Nimal', agent: 'Claude Code', home: 1, laps: 41 },
+  { id: 'KAS', name: 'Kasun', agent: 'Claude Code', home: 1, laps: 38 },
+  { id: 'AMA', name: 'Amaya', agent: 'Codex', home: 2, laps: 35 },
+  { id: 'RUW', name: 'Ruwan', agent: 'Claude Code', home: 3, laps: 33 },
+  { id: 'JAN', name: 'Janith', agent: 'Claude Code', home: 4, laps: 29 },
+];
+agents.forEach((a) => (a.sectors = ['g', 'g', 'p']));
+function sector(a, kind) { a.sectors.push(kind); if (a.sectors.length > 3) a.sectors.shift(); }
+const verbs = ['edit', 'read', 'edit', 'edit', 'read'];
+agents.forEach((a, i) => {
+  a.target = clusters[a.home].nodes[i % clusters[a.home].nodes.length];
+  a.pos = { x: a.target.x, y: a.target.y - 30, z: a.target.z };
+  a.trail = []; a.state = 'working'; a.stream = []; a.phase = rand() * 6;
+  a.now = `${verbs[i]} ${a.target.path}`;
+  log(a, a.now);
+});
+
+function log(a, text, cls) {
+  const d = new Date(); const t = d.toTimeString().slice(0, 8);
+  a.stream.push({ t, text, cls }); if (a.stream.length > 60) a.stream.shift();
+  if (selected === a) renderDrawer();
+}
+
+function moveTo(a, node, verb = 'edit') {
+  a.target = node; node.heat = 1; a.now = `${verb} ${node.path}`; log(a, a.now);
+  a.laps++; if (verb === 'edit') sector(a, 'g');
+  if (rand() < 0.35) setTimeout(() => { log(a, 'bash pnpm test  ✓ passed'); sector(a, 'p'); }, 600);
+}
+
+// Collisions: two agents on the same file = yellow flag + Team Radio.
+const shocks = [];
+let recentPairs = new Map();
+function checkCollisions(now) {
+  agents.forEach((a) => { if (a.state === 'yellow') a.state = 'working'; });
+  for (let i = 0; i < agents.length; i++) for (let j = i + 1; j < agents.length; j++) {
+    const a = agents[i], b = agents[j];
+    if (a.target === b.target && ['working', 'yellow'].includes(a.state) && ['working', 'yellow'].includes(b.state)) {
+      a.state = b.state = 'yellow';
+      const key = a.id + b.id + a.target.path;
+      if (!recentPairs.has(key) || now - recentPairs.get(key) > 8000) {
+        recentPairs.set(key, now);
+        shocks.push({ node: a.target, t: 0, color: COLORS.yellow });
+        sector(a, 'y'); sector(b, 'y');
+        raceControl(COLORS.yellow, 'Yellow flag', `${a.target.cluster.name} · ${a.id} & ${b.id}`, a.target.path);
+        radio(`${a.id} → ${b.id}`, `"${b.name}, I'm in ${a.target.path.split('/').pop()}. Hold your edit."`);
+        log(b, `radio: ${a.name} is on this file`, 'hl'); log(a, `radio: ${b.name} joined this file`, 'hl');
+      }
+    }
+  }
+}
+
+// Scripted moments so every visit shows the interesting cases.
+let clock = 0;
+setInterval(() => {
+  clock++;
+  agents.forEach((a) => {
+    if (a.state === 'waiting' || a.state === 'blocked') return;
+    if (rand() < 0.45) {
+      const c = rand() < 0.8 ? clusters[a.home] : clusters[Math.floor(rand() * clusters.length)];
+      const n = c.nodes[Math.floor(rand() * c.nodes.length)];
+      if (n.path.endsWith('.env') || n.path.includes('0042')) return;
+      moveTo(a, n, rand() < 0.3 ? 'read' : 'edit');
+    }
+  });
+  if (clock % 9 === 3) moveTo(agents[1], agents[0].target, 'edit');          // Kasun walks into Nimal's file
+  if (clock === 4 || clock % 30 === 4) requestApproval(agents[2], nodeByPath('db/migrations/0042_users.sql'));
+  if (clock % 17 === 8) block(agents[4], nodeByPath('hooks/.env'));
+}, 1600);
+
+function requestApproval(a, node) {
+  if (a.state === 'waiting') return;
+  moveTo(a, node, 'edit'); a.state = 'waiting'; log(a, 'held: approve migration edits', 'hl');
+  raceControl(COLORS.waiting, 'Pit lane', `${a.id} · waiting for approval`, node.path);
+  showApproval(a, node);
+}
+function block(a, node) {
+  moveTo(a, node, 'edit'); a.state = 'blocked';
+  shocks.push({ node, t: 0, color: COLORS.blocked });
+  sector(a, 'r');
+  raceControl(COLORS.blocked, 'Black flag', `${a.id} · rule: never touch .env`, `edit ${node.path}`); log(a, 'blocked: never touch .env', 'bad');
+  setTimeout(() => { a.state = 'working'; moveTo(a, clusters[a.home].nodes[0], 'read'); }, 5200);
+}
+
+// Projection.
+let yaw = 0.6, pitch = 0.42, targetYaw = 0.6, zoom = 1, camFocus = { x: 0, y: 0, z: 0 }, focusTarget = { x: 0, y: 0, z: 0 };
+function project(p) {
+  const x = p.x - camFocus.x, y = p.y - camFocus.y, z = p.z - camFocus.z;
+  const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
+  const x1 = x * cy - z * sy, z1 = x * sy + z * cy;
+  const y2 = y * cp - z1 * sp, z2 = y * sp + z1 * cp;
+  const f = 900 * zoom, s = (f / (f + z2 + 520)) * Math.min(W / 760, H / 520);
+  return { x: W / 2 + 20 + x1 * s, y: H / 2 + 20 + y2 * s, s, z: z2 };
+}
+
+function glow(x, y, r, color, alpha) {
+  const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+  g.addColorStop(0, hexA(color, alpha)); g.addColorStop(1, hexA(color, 0));
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+}
+function hexA(hex, a) { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; }
+
+function frame(now) {
+  const dt = Math.min(50, now - last); last = now;
+  yaw += (targetYaw - yaw) * 0.02; targetYaw += 0.00012 * dt;
+  camFocus.x += (focusTarget.x - camFocus.x) * 0.05; camFocus.y += (focusTarget.y - camFocus.y) * 0.05; camFocus.z += (focusTarget.z - camFocus.z) * 0.05;
+  zoom += ((selected ? 1.35 : 1) - zoom) * 0.05;
+  checkCollisions(now);
+
+  ctx.clearRect(0, 0, W, H);
+  const bg = ctx.createRadialGradient(W / 2, H * 0.45, 0, W / 2, H * 0.45, Math.max(W, H) * 0.7);
+  bg.addColorStop(0, '#0d1017'); bg.addColorStop(1, '#06070a');
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+
+  // Floor grid, fading out towards the edges.
+  ctx.lineWidth = 1;
+  for (let i = -10; i <= 10; i++) {
+    for (const axis of [0, 1]) {
+      const a = axis ? { x: i * 70, y: 175, z: -700 } : { x: -700, y: 175, z: i * 70 };
+      const b = axis ? { x: i * 70, y: 175, z: 700 } : { x: 700, y: 175, z: i * 70 };
+      const pa = project(a), pb = project(b);
+      const g = ctx.createLinearGradient(pa.x, pa.y, pb.x, pb.y);
+      const al = 0.07 * (1 - Math.abs(i) / 11);
+      g.addColorStop(0, 'rgba(140,150,255,0)'); g.addColorStop(0.5, `rgba(140,150,255,${al})`); g.addColorStop(1, 'rgba(140,150,255,0)');
+      ctx.strokeStyle = g; ctx.beginPath(); ctx.moveTo(pa.x, pa.y); ctx.lineTo(pb.x, pb.y); ctx.stroke();
+    }
+  }
+
+  // Floating dust for depth.
+  dust.forEach((d) => {
+    d.y -= d.v * dt * 0.05; if (d.y < -300) d.y = 200;
+    const p = project(d); if (p.s <= 0) return;
+    ctx.fillStyle = `rgba(180,190,255,${Math.min(0.35, 0.12 * p.s)})`;
+    ctx.fillRect(p.x, p.y, 1.4 * p.s, 1.4 * p.s);
+  });
+
+  // Folder halos, links and names.
+  ctx.globalCompositeOperation = 'lighter';
+  clusters.forEach((c) => {
+    const pc = project(c.center);
+    glow(pc.x, pc.y, 150 * pc.s, c.hue, 0.09);
+    glow(pc.x, pc.y, 40 * pc.s, c.hue, 0.12);
+    c.nodes.forEach((n) => {
+      const pn = project(n);
+      ctx.strokeStyle = hexA(c.hue, 0.1 + n.heat * 0.55); ctx.lineWidth = 1 + n.heat * 1.5;
+      ctx.beginPath(); ctx.moveTo(pc.x, pc.y); ctx.lineTo(pn.x, pn.y); ctx.stroke();
+    });
+  });
+  ctx.globalCompositeOperation = 'source-over';
+  clusters.forEach((c) => {
+    const pc = project(c.center);
+    ctx.fillStyle = hexA(c.hue, 0.75); ctx.font = `500 ${12 * Math.max(0.85, pc.s)}px Geist Mono, monospace`; ctx.textAlign = 'center';
+    ctx.fillText(c.name + '/', pc.x, pc.y + 135 * pc.s);
+  });
+
+  // File nodes, depth-sorted.
+  const projected = nodes.map((n) => ({ n, p: project(n) })).sort((a, b) => b.p.z - a.p.z);
+  projected.forEach(({ n, p }) => {
+    n.heat = Math.max(0, n.heat - dt / 5000);
+    glow(p.x, p.y, (10 + n.heat * 30) * p.s, n.cluster.hue, 0.25 + n.heat * 0.5);
+    ctx.fillStyle = `rgba(230,234,255,${0.55 + n.heat * 0.45})`;
+    ctx.beginPath(); ctx.arc(p.x, p.y, (2.4 + n.heat * 2.4) * p.s, 0, Math.PI * 2); ctx.fill();
+  });
+
+  // Shockwaves.
+  for (let i = shocks.length - 1; i >= 0; i--) {
+    const s = shocks[i]; s.t += dt / 1400; const p = project(s.node);
+    ctx.strokeStyle = hexA(s.color, (1 - s.t) * 0.8); ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.ellipse(p.x, p.y, 90 * s.t * p.s, 40 * s.t * p.s, 0, 0, Math.PI * 2); ctx.stroke();
+    if (s.t >= 1) shocks.splice(i, 1);
+  }
+
+  // Agents.
+  ctx.globalCompositeOperation = 'lighter';
+  const sorted = [...agents].sort((a, b) => project(b.pos).z - project(a.pos).z);
+  sorted.forEach((a) => {
+    a.phase += dt / 900;
+    const t = a.target, orbit = a.state === 'working' || a.state === 'yellow' ? 18 : 6;
+    const goal = { x: t.x + Math.cos(a.phase) * orbit, y: t.y - 26 + Math.sin(a.phase * 1.3) * 6, z: t.z + Math.sin(a.phase) * orbit };
+    const k = a.state === 'blocked' ? 0.02 : 0.045;
+    a.pos.x += (goal.x - a.pos.x) * k; a.pos.y += (goal.y - a.pos.y) * k; a.pos.z += (goal.z - a.pos.z) * k;
+    a.trail.push({ ...a.pos }); if (a.trail.length > 90) a.trail.shift();
+    const col = COLORS[a.state];
+    for (let i = 1; i < a.trail.length; i++) {
+      const p0 = project(a.trail[i - 1]), p1 = project(a.trail[i]);
+      ctx.strokeStyle = hexA(col, (i / a.trail.length) * 0.6); ctx.lineWidth = (i / a.trail.length) * 4 * p1.s;
+      ctx.beginPath(); ctx.moveTo(p0.x, p0.y); ctx.lineTo(p1.x, p1.y); ctx.stroke();
+    }
+    const p = project(a.pos); a.screen = p;
+    const pt = project(a.target);
+    ctx.setLineDash([3 * p.s, 5 * p.s]); ctx.strokeStyle = hexA(col, 0.5); ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(pt.x, pt.y); ctx.stroke(); ctx.setLineDash([]);
+    glow(pt.x, pt.y, 22 * pt.s, col, 0.35);
+    const pulse = a.state === 'waiting' || a.state === 'blocked' ? 0.6 + 0.4 * Math.sin(now / 220) : 1;
+    glow(p.x, p.y, 70 * p.s * pulse, col, 0.32);
+    glow(p.x, p.y, 26 * p.s, col, 0.5);
+    if (a.state === 'waiting') {
+      const beam = ctx.createLinearGradient(p.x, p.y, p.x, p.y - 260 * p.s);
+      beam.addColorStop(0, hexA(col, 0.5)); beam.addColorStop(1, hexA(col, 0));
+      ctx.fillStyle = beam; ctx.fillRect(p.x - 2 * p.s, p.y - 260 * p.s, 4 * p.s, 260 * p.s);
+    }
+  });
+  ctx.globalCompositeOperation = 'source-over';
+  sorted.forEach((a) => {
+    const p = a.screen, col = COLORS[a.state], r = 15 * p.s;
+    ctx.fillStyle = '#12151b'; ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = col; ctx.lineWidth = (a === selected || a === hover ? 2.6 : 1.8); ctx.stroke();
+    ctx.fillStyle = '#eceef2'; ctx.font = `italic 700 ${10 * p.s}px Titillium Web, Geist, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(a.id, p.x, p.y + 0.5); ctx.textBaseline = 'alphabetic';
+    if (a === selected || a === hover || a.state !== 'working') {
+      ctx.fillStyle = 'rgba(236,238,242,0.55)'; ctx.font = `${10.5 * Math.max(0.85, p.s)}px Geist Mono, monospace`;
+      ctx.fillText(a.target.path, p.x, p.y + r + 16);
+    }
+  });
+
+  updateHud();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// HUD: the timing tower, ordered by laps (completed tool calls) like an F1 leaderboard.
+const towerRows = document.getElementById('towerRows');
+const SECTOR = { g: '#3ddc84', p: '#b66dff', y: '#ffc53d', r: '#ff5a5f' };
+agents.forEach((a) => {
+  const b = document.createElement('button'); b.className = 'trow'; b.setAttribute('aria-label', `${a.name}'s agent`);
+  b.innerHTML = `<span class="pos"></span><span class="bar"></span><span class="code">${a.id}<small>${a.agent === 'Codex' ? 'CDX' : 'CC'}</small></span><span class="sectors"><i></i><i></i><i></i></span><span class="gap"></span>`;
+  b.onclick = () => select(a); a.row = b; towerRows.append(b);
+});
+function updateHud() {
+  const count = (s) => agents.filter((a) => a.state === s).length;
+  document.getElementById('sWork').textContent = count('working');
+  document.getElementById('sYellow').textContent = count('yellow');
+  document.getElementById('sWait').textContent = count('waiting');
+  document.getElementById('sBlock').textContent = count('blocked');
+  document.getElementById('railBadge').style.display = count('waiting') ? 'block' : 'none';
+  const order = [...agents].sort((x, y) => y.laps - x.laps);
+  document.getElementById('lap').textContent = `LAP ${order[0].laps}`;
+  order.forEach((a, i) => {
+    const r = a.row;
+    r.style.order = i; r.querySelector('.pos').textContent = i + 1;
+    r.querySelector('.bar').style.setProperty('--c', COLORS[a.state]);
+    r.querySelector('.gap').textContent = i === 0 ? 'LEAD' : a.state === 'waiting' ? 'PIT' : a.state === 'blocked' ? 'STOP' : `+${order[0].laps - a.laps}`;
+    r.querySelectorAll('.sectors i').forEach((s, j) => (s.style.background = SECTOR[a.sectors[j]] || ''));
+    r.classList.toggle('sel', a === selected);
+  });
+  towerRows.style.display = 'flex'; towerRows.style.flexDirection = 'column';
+  if (selected) { document.getElementById('dNow').textContent = selected.now; document.getElementById('dState').textContent = stateLabel(selected.state); }
+}
+const stateLabel = (s) => ({ working: '● Working', yellow: '● Yellow flag: sharing a file', waiting: '● Waiting for approval', blocked: '● Blocked by a rule', idle: '● Idle' })[s];
+
+const drawer = document.getElementById('drawer');
+function select(a) {
+  selected = selected === a ? null : a;
+  drawer.classList.toggle('open', !!selected);
+  focusTarget = selected ? { x: selected.target.x * 0.6, y: selected.target.y * 0.6, z: selected.target.z * 0.6 } : { x: 0, y: 0, z: 0 };
+  if (selected) renderDrawer();
+}
+function renderDrawer() {
+  const a = selected;
+  const ava = document.getElementById('dAva'); ava.textContent = a.id; ava.style.setProperty('--c', COLORS[a.state]);
+  document.getElementById('dName').textContent = a.name;
+  document.getElementById('dMeta').textContent = `${a.agent} · buildflow/api`;
+  document.getElementById('dStream').innerHTML = a.stream.slice(-22).map((l) => `<div class="${l.cls || ''}"><span class="t">${l.t}</span>${l.text}</div>`).join('');
+}
+document.getElementById('dClose').onclick = () => selected && select(selected);
+
+canvas.addEventListener('mousemove', (e) => {
+  hover = agents.find((a) => a.screen && Math.hypot(a.screen.x - e.clientX, a.screen.y - e.clientY) < 22) || null;
+  const tip = document.getElementById('tip');
+  canvas.style.cursor = hover ? 'pointer' : 'default';
+  if (hover) { tip.innerHTML = `<b style="font-weight:500">${hover.name}</b> <span class="mono" style="color:var(--dim)">${hover.now}</span>`; tip.style.left = e.clientX + 14 + 'px'; tip.style.top = e.clientY + 14 + 'px'; }
+  tip.classList.toggle('show', !!hover);
+});
+canvas.addEventListener('click', () => { if (hover) select(hover); });
+let dragging = false, lx = 0;
+canvas.addEventListener('pointerdown', (e) => { dragging = true; lx = e.clientX; });
+addEventListener('pointerup', () => (dragging = false));
+addEventListener('pointermove', (e) => { if (dragging) { targetYaw += (e.clientX - lx) * 0.004; lx = e.clientX; } });
+
+// Race Control messages, styled like the broadcast banner.
+function raceControl(color, tag, body, detail) {
+  const box = document.getElementById('rc');
+  const t = document.createElement('div'); t.className = 'rcmsg'; t.style.setProperty('--c', color);
+  t.innerHTML = `<span class="tag">${tag}</span><span class="src">RACE CONTROL</span><span class="body">${body}<span class="mono">${detail}</span></span>`;
+  box.append(t); while (box.children.length > 2) box.firstChild.remove();
+  setTimeout(() => t.remove(), 5000);
+}
+let radioTimer = null;
+function radio(who, quote) {
+  document.getElementById('radioWho').textContent = who;
+  document.getElementById('radioQ').textContent = quote;
+  const r = document.getElementById('radio'); r.classList.add('open');
+  clearTimeout(radioTimer); radioTimer = setTimeout(() => r.classList.remove('open'), 4200);
+}
+const toast = (color, title, detail) => raceControl(color, 'Approved', title, detail);
+
+// Session clock.
+const sessionStart = Date.now() - (2 * 3600 + 14 * 60) * 1000;
+setInterval(() => {
+  const s = Math.floor((Date.now() - sessionStart) / 1000);
+  document.getElementById('clock').textContent = [s / 3600, (s / 60) % 60, s % 60].map((v) => String(Math.floor(v)).padStart(2, '0')).join(':');
+}, 1000);
+
+// Lights out: five pairs of red lights, then go.
+(function startLights() {
+  const el = document.getElementById('lights'), pods = el.querySelectorAll('.pod');
+  let i = 0, done = false;
+  const finish = () => { if (done) return; done = true; pods.forEach((p) => p.classList.remove('on')); document.getElementById('lightsWord').classList.add('show'); zoom = 0.55; setTimeout(() => el.classList.add('gone'), 450); };
+  const step = setInterval(() => { if (i < pods.length) pods[i++].classList.add('on'); else { clearInterval(step); setTimeout(finish, 650); } }, 550);
+  el.addEventListener('click', () => { clearInterval(step); finish(); });
+})();
+
+// Approval card with a countdown to auto-deny.
+let approvalAgent = null, approvalTimer = null;
+function showApproval(a, node) {
+  approvalAgent = a; let left = 240;
+  document.getElementById('aWho').textContent = a.name;
+  document.getElementById('aPath').textContent = node.path;
+  document.getElementById('approval').classList.add('open');
+  const bar = document.getElementById('aBar'); bar.style.width = '100%';
+  clearInterval(approvalTimer);
+  approvalTimer = setInterval(() => {
+    left--; document.getElementById('aTime').textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
+    bar.style.width = (left / 240) * 100 + '%'; if (left <= 0) decide(false);
+  }, 1000);
+}
+function decide(ok) {
+  if (!approvalAgent) return;
+  clearInterval(approvalTimer); document.getElementById('approval').classList.remove('open');
+  const a = approvalAgent; approvalAgent = null;
+  if (ok) { a.state = 'working'; log(a, 'approved by lead'); toast(COLORS.working, `Approved · ${a.name}`, a.target.path); }
+  else { a.state = 'blocked'; log(a, 'denied by lead', 'bad'); setTimeout(() => { a.state = 'working'; moveTo(a, clusters[a.home].nodes[0], 'read'); }, 2500); }
+}
+document.getElementById('approve').onclick = () => decide(true);
+document.getElementById('deny').onclick = () => decide(false);
+
+// Command palette.
+const scrim = document.getElementById('scrim');
+const openPalette = () => { scrim.classList.add('open'); scrim.querySelector('input').focus(); };
+document.getElementById('openPalette').onclick = openPalette;
+scrim.onclick = (e) => { if (e.target === scrim) scrim.classList.remove('open'); };
+addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); openPalette(); }
+  if (e.key === 'Escape') { scrim.classList.remove('open'); if (selected) select(selected); }
+});
+setTimeout(() => select(agents[0]), 6500);
+</script>
+</body>
+</html>
