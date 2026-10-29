@@ -1,7 +1,7 @@
 import { Gauge, Settings2, Users, type LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { FLAGS, type FlagStatus } from '@/components/status-flag';
-import { ThemeMenu } from '@/components/theme-menu';
+import { AccountMenu } from '@/components/theme-menu';
 import { TrackScene } from '@/components/track-scene';
 import { Wordmark } from '@/components/wordmark';
 import { cn } from '@/lib/utils';
@@ -26,11 +26,13 @@ type AppShellProps = {
   counts?: Partial<Record<FlagStatus, number>>;
   /** Extra items on the right of the top bar, e.g. the live clock. */
   actions?: ReactNode;
+  /** The signed-in person's email, for the account menu. */
+  userEmail: string;
   children: ReactNode;
 };
 
 /** Floating glass chrome over the track scene: icon rail and top bar on desktop, top bar and tab bar on phones. */
-export function AppShell({ teamName, basePath, active, counts, actions, children }: AppShellProps) {
+export function AppShell({ teamName, basePath, active, counts, actions, userEmail, children }: AppShellProps) {
   const href = (path: string) => basePath + path || '/';
 
   return (
@@ -80,7 +82,7 @@ export function AppShell({ teamName, basePath, active, counts, actions, children
 
         <div className="flex items-center gap-2">
           {actions}
-          <ThemeMenu />
+          <AccountMenu email={userEmail} />
         </div>
       </header>
 

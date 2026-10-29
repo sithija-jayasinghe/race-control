@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { StartLights } from '@/components/start-lights';
 import { cn } from '@/lib/utils';
 
 const SEEN_KEY = 'rc-lights-seen';
@@ -89,22 +90,7 @@ export function LightsOut() {
         phase === 'fading' && 'pointer-events-none opacity-0',
       )}
     >
-      <div className="flex gap-4 rounded-xl border border-white/10 bg-[#0d0f13] px-5 py-4 sm:gap-[18px]">
-        {[0, 1, 2, 3, 4].map((i) => (
-          <div key={i} className="flex flex-col gap-2.5 rounded-lg bg-[#08090b] p-2.5">
-            {[0, 1].map((j) => (
-              <span
-                key={j}
-                data-lit={i < lit}
-                className={cn(
-                  'size-7 rounded-full bg-[#1a0b0b] transition-[background,box-shadow] duration-75 sm:size-[34px]',
-                  i < lit && 'bg-f1 shadow-[0_0_22px_var(--f1),0_0_60px_rgb(225_6_0/0.5)]',
-                )}
-              />
-            ))}
-          </div>
-        ))}
-      </div>
+      <StartLights lit={lit} />
       <span className={cn('broadcast text-3xl text-[#eceef2] opacity-0 transition-opacity', phase !== 'counting' && 'opacity-100')}>
         Lights out
       </span>

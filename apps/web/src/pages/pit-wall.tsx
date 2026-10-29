@@ -6,8 +6,9 @@ import { RaceControlBanner } from '@/components/race-control-banner';
 import type { FlagStatus } from '@/components/status-flag';
 import { TeamRadioCard } from '@/components/team-radio-card';
 import { TimingTower, type Driver } from '@/components/timing-tower';
+import { useTeamContext } from '@/routes';
 
-// Sample data for the design preview. Sign-in and real teams replace this in steps 7b to 7d,
+// Sample data for the design preview. Step 7d replaces it with the empty track and connect checklist,
 // and live agents arrive with the hook endpoints in Week 2.
 const SAMPLE_DRIVERS: Driver[] = [
   { id: '1', code: 'NIM', name: 'Nimal', agent: 'claude_code', status: 'yellow', laps: 44, sectors: ['clean', 'tests', 'yellow'] },
@@ -24,16 +25,18 @@ function countByStatus(drivers: Driver[]) {
   return counts;
 }
 
-export function App() {
+export function PitWallPage() {
+  const { me, team } = useTeamContext();
   const [selectedId, setSelectedId] = useState<string>();
 
   return (
     <>
       <LightsOut />
       <AppShell
-        teamName="BuildFlow"
-        basePath=""
+        teamName={team.name}
+        basePath={`/t/${team.id}`}
         active="pit-wall"
+        userEmail={me.user.email}
         counts={countByStatus(SAMPLE_DRIVERS)}
         actions={<LiveClock since={SESSION_START} className="hidden sm:inline-flex" />}
       >
