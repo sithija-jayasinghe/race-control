@@ -96,7 +96,7 @@ describe('Team page invite links', () => {
     const link = await screen.findByRole<HTMLInputElement>('textbox', { name: 'New invite link' });
     expect(link.value).toContain('/invite#token=');
     expect(screen.getByText(/join as a lead for 7 days/)).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Copy' }));
+    await user.click(screen.getByRole('button', { name: 'Copy invite link' }));
     expect(await navigator.clipboard.readText()).toBe(link.value);
     expect(screen.getByRole('button', { name: 'Copied' })).toBeInTheDocument();
     expect(await screen.findByRole('list', { name: 'Active invite links' })).toHaveTextContent('Lead');

@@ -1,8 +1,10 @@
 import type { Member, Role } from '@race-control/shared';
-import { Check, Copy, MoreHorizontal } from 'lucide-react';
+import { MoreHorizontal } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { AppShell } from '@/components/app-shell';
+import { CopyButton } from '@/components/copy-button';
+import { Panel } from '@/components/panel';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -132,29 +134,6 @@ function MemberRow({ member, isMe, canManage, teamId }: { member: Member; isMe: 
   );
 }
 
-function CopyButton({ text }: { text: string }) {
-  const [copied, setCopied] = useState(false);
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Clipboard blocked: the link is selectable in the box next to this button.
-    }
-  };
-  return (
-    <button
-      type="button"
-      onClick={() => void copy()}
-      className="flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-glass-line px-3 text-sm hover:bg-white/5"
-    >
-      {copied ? <Check className="size-4 text-flag-green" aria-hidden="true" /> : <Copy className="size-4" aria-hidden="true" />}
-      {copied ? 'Copied' : 'Copy'}
-    </button>
-  );
-}
-
 function InvitePanel({ teamId }: { teamId: string }) {
   const invites = useInvites(teamId, true);
   const create = useCreateInvite(teamId);
@@ -162,13 +141,7 @@ function InvitePanel({ teamId }: { teamId: string }) {
   const [role, setRole] = useState<Role>('developer');
 
   return (
-    <section aria-labelledby="invites-heading" className="glass overflow-hidden rounded-xl">
-      <header className="flex items-center justify-between bg-black/30 px-4 py-2.5">
-        <h2 id="invites-heading" className="broadcast text-[13px]">
-          Invite links
-        </h2>
-      </header>
-      <div className="kerb" aria-hidden="true" />
+    <Panel title="Invite links">
       <div className="space-y-4 p-4">
         <div className="flex gap-2">
           <div role="radiogroup" aria-label="Role for new members" className="flex rounded-xl border border-glass-line p-1">
@@ -208,7 +181,7 @@ function InvitePanel({ teamId }: { teamId: string }) {
                 onFocus={(e) => e.currentTarget.select()}
                 className="h-9 min-w-0 flex-1 rounded-lg bg-black/30 px-2.5 font-mono text-xs outline-none"
               />
-              <CopyButton text={create.data.url} />
+              <CopyButton text={create.data.url} label="invite link" />
             </div>
             <p className="text-xs text-muted-foreground">
               Anyone with this link can join as a {create.data.role === 'lead' ? 'lead' : 'developer'} for 7 days. It
@@ -241,7 +214,7 @@ function InvitePanel({ teamId }: { teamId: string }) {
           </ul>
         )}
       </div>
-    </section>
+    </Panel>
   );
 }
 
@@ -262,13 +235,7 @@ export function TeamPage() {
           )}
         </div>
         <div className={cn('grid gap-4', isLead && 'md:grid-cols-[minmax(0,1fr)_320px]')}>
-          <section aria-labelledby="members-heading" className="glass overflow-hidden rounded-xl">
-            <header className="bg-black/30 px-4 py-2.5">
-              <h2 id="members-heading" className="broadcast text-[13px]">
-                Members
-              </h2>
-            </header>
-            <div className="kerb" aria-hidden="true" />
+          <Panel title="Members">
             {members.isPending && (
               <div role="status" className="space-y-3 p-4">
                 <span className="sr-only">Loading members</span>
@@ -298,7 +265,7 @@ export function TeamPage() {
                 ))}
               </ul>
             )}
-          </section>
+          </Panel>
           {isLead && <InvitePanel teamId={team.id} />}
         </div>
       </div>

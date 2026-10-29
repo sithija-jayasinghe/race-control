@@ -30,6 +30,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Create a team from the first-run page or the team switcher in the top bar.
 - Invite page: open an invite link to see the team and your role, sign in if needed (you come straight back), and join.
 - Team page: members and roles; leads can change roles, remove members (with a confirm step) and create, copy and revoke invite links. Anyone can leave a team, and the last lead is told why they can't step down.
+- Settings page: create agent tokens (shown once, with copy buttons for the token and the `export RACE_CONTROL_TOKEN=…` line), see when each was last used, and revoke them. Leads see everyone's tokens. Theme choice.
+- The Pit wall now starts as an empty track ("No cars on track") with the steps to connect an agent, and a "Watch a demo race" mode with sample drivers.
 
 ### Removed
 - `SESSION_SECRET` from `.env.example`. Login sessions are looked up by hash, so nothing needs signing.

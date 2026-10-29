@@ -1,4 +1,4 @@
-import type { Invite, Member, MeResponse, MyTeam, Role } from '@race-control/shared';
+import type { DevToken, Invite, Member, MeResponse, MyTeam, Role } from '@race-control/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render } from '@testing-library/react';
 import { StrictMode } from 'react';
@@ -42,6 +42,7 @@ export function fakeServer(options: { signedIn?: boolean; teams?: MeResponse['te
       ]),
     ),
     invites: new Map<string, Invite[]>(),
+    tokens: new Map<string, DevToken[]>(),
   };
   const calls: Array<{ method: string; path: string; body: unknown }> = [];
   const members = (teamId: string) => state.members.get(teamId) ?? [];
@@ -126,6 +127,33 @@ export function fakeServer(options: { signedIn?: boolean; teams?: MeResponse['te
       /^\/teams\/([^/]+)\/invites\/([^/]+)$/,
       (_, [teamId, inviteId]) => {
         state.invites.set(teamId!, (state.invites.get(teamId!) ?? []).filter((i) => i.id !== inviteId));
+        return ok();
+      },
+    ],
+    ['GET', /^\/teams\/([^/]+)\/tokens$/, (_, [teamId]) => ok(state.tokens.get(teamId!) ?? [])],
+    [
+      'POST',
+      /^\/teams\/([^/]+)\/tokens$/,
+      (body, [teamId]) => {
+        const mine = (state.tokens.get(teamId!) ?? []).filter((t) => t.userId === USER.id);
+        if (mine.length >= 10) return fail(409, 'too_many_tokens');
+        const token: DevToken = {
+          id: newId(),
+          label: (body as { label: string }).label.trim(),
+          userId: USER.id,
+          userEmail: USER.email,
+          createdAt: new Date().toISOString(),
+          lastUsedAt: null,
+        };
+        state.tokens.set(teamId!, [token, ...(state.tokens.get(teamId!) ?? [])]);
+        return { status: 201, body: { ...token, token: `rc_${'x'.repeat(40)}${token.id.slice(-3)}` } };
+      },
+    ],
+    [
+      'DELETE',
+      /^\/teams\/([^/]+)\/tokens\/([^/]+)$/,
+      (_, [teamId, tokenId]) => {
+        state.tokens.set(teamId!, (state.tokens.get(teamId!) ?? []).filter((t) => t.id !== tokenId));
         return ok();
       },
     ],

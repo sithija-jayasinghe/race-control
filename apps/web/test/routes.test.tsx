@@ -31,7 +31,7 @@ describe('signed in', () => {
 
     const { router } = renderApp('/');
 
-    expect(await screen.findByRole('heading', { level: 1, name: 'Pit wall' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: 'No cars on track' })).toBeInTheDocument();
     expect(router.state.location.pathname).toBe(`/t/${TEAM.id}`);
     expect(screen.getByText('BuildFlow')).toBeInTheDocument();
     expect(screen.getByRole('img', { name: 'Race Control' })).toBeInTheDocument();
@@ -77,7 +77,7 @@ describe('signed in', () => {
     fakeServer({ signedIn: true });
     renderApp(`/t/${TEAM.id}`);
 
-    await screen.findByRole('heading', { level: 1, name: 'Pit wall' });
+    await screen.findByRole('heading', { level: 1, name: 'No cars on track' });
     const navs = screen.getAllByRole('navigation', { name: 'Main' });
     expect(navs).toHaveLength(2);
     for (const nav of navs) {

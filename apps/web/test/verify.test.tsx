@@ -17,7 +17,7 @@ describe('magic link landing page', () => {
     const { router } = openLink('good-token');
 
     await waitFor(() => expect(router.state.location.pathname).toBe(`/t/${TEAM.id}`));
-    expect(await screen.findByRole('heading', { level: 1, name: 'Pit wall' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: 'No cars on track' })).toBeInTheDocument();
     // StrictMode runs effects twice; the single-use token must still be sent only once.
     expect(server.callsTo('POST /auth/verify')).toEqual([
       { method: 'POST', path: '/auth/verify', body: { token: 'good-token' } },

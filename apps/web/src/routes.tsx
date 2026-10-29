@@ -5,6 +5,7 @@ import { StartLights } from '@/components/start-lights';
 import { rememberNextPath, useMe } from '@/lib/auth';
 import { InvitePage } from '@/pages/invite';
 import { PitWallPage } from '@/pages/pit-wall';
+import { SettingsPage } from '@/pages/settings';
 import { SignInPage } from '@/pages/sign-in';
 import { StartPage } from '@/pages/start';
 import { TeamPage } from '@/pages/team';
@@ -106,6 +107,7 @@ export const routes: RouteObject[] = [
         children: [
           { index: true, element: <PitWallPage /> },
           { path: 'team', element: <TeamPage /> },
+          { path: 'settings', element: <SettingsPage /> },
         ],
       },
     ],

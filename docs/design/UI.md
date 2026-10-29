@@ -96,7 +96,7 @@ Desktop                                              Phone
 | Link landing | `/auth/verify#token=…` | 1 |
 | Invite | `/invite#token=…` | 1 |
 | Create your team | `/start` | 1 |
-| Pit wall (Week 1: empty track and connect checklist) | `/t/:teamId` | 1, live map in Week 3 |
+| Pit wall (Week 1: empty track, connect checklist, and a demo race at `?demo=1`) | `/t/:teamId` | 1, live map in Week 3 |
 | Team: members and invite links | `/t/:teamId/team` | 1 |
 | Settings: your tokens, theme | `/t/:teamId/settings` | 1 |
 | Session timeline | `/t/:teamId/sessions/:id` | 3 |
