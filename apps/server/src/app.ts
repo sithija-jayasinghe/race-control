@@ -6,10 +6,12 @@ import type { Database } from './db/client.ts';
 import { registerErrorHandler } from './lib/errors.ts';
 import type { Mailer } from './lib/mailer.ts';
 import { authRoutes } from './modules/auth/routes.ts';
+import { hookRoutes } from './modules/hooks/routes.ts';
 import { inviteRoutes } from './modules/invites/routes.ts';
 import { teamRoutes } from './modules/teams/routes.ts';
 import { tokenRoutes } from './modules/tokens/routes.ts';
 import { registerAuth } from './plugins/auth.ts';
+import { registerDevTokenAuth } from './plugins/dev-token-auth.ts';
 import { registerTeamAccess } from './plugins/team-access.ts';
 
 export type AppDeps = {
@@ -42,12 +44,14 @@ export async function buildApp({ logger, now = () => new Date(), ...rest }: Buil
   await app.register(rateLimit, { global: false });
   registerAuth(app, deps);
   registerTeamAccess(app);
+  registerDevTokenAuth(app);
 
   app.get('/health', () => ({ status: 'ok' }));
   authRoutes(app, deps);
   teamRoutes(app, deps);
   inviteRoutes(app, deps);
   tokenRoutes(app, deps);
+  hookRoutes(app, deps);
 
   return app;
 }

@@ -75,12 +75,21 @@ The developer then sets `export RACE_CONTROL_TOKEN=...` in their shell. Headers 
 
 HTTP hooks time out after 600 s by default. The snippet sets 300 s on `PreToolUse` so a held approval expires on Race Control's side first. A hook can also set `"onFailure": "block"` (Claude Code v2.1.295+) so the tool call is blocked if Race Control can't be reached (see section 5).
 
-> **Verify against the current docs before building**: https://code.claude.com/docs/en/hooks. Hook event names, fields and output formats change between Claude Code versions. Last checked: 2026-10-27.
+> **Verify against the current docs before building**: https://code.claude.com/docs/en/hooks. Hook event names, fields and output formats change between Claude Code versions. Last checked: 2026-10-29.
 
 ### What a hook sends (the parts Race Control uses)
 
-Every event: `session_id`, `cwd`, `hook_event_name`, `permission_mode`, `transcript_path`.
-`PreToolUse` and `PostToolUse` also include `tool_name`, `tool_input` and `tool_use_id`.
+Every event: `session_id`, `cwd`, `hook_event_name`, and sometimes `permission_mode`, `agent_id` and `agent_type` (inside subagents). `transcript_path` is sent but never stored.
+
+| Event | Extra fields used | Session becomes |
+|---|---|---|
+| `SessionStart` | `source` (startup, resume, clear, compact, fork), `model` | active |
+| `PreToolUse`, `PostToolUse` | `tool_name`, `tool_input`, `tool_use_id`. `tool_response` is discarded | active |
+| `PostToolUseFailure` | as above, plus the first line of `error` and `is_interrupt` | active |
+| `Stop` | none. `last_assistant_message` (Claude's reply) is discarded | idle |
+| `SessionEnd` | `reason` | ended |
+
+Other events get an empty `200` and aren't stored. A session is created by its first event, even if `SessionStart` was missed, and `repo_name` is the last folder of `cwd`. `SessionEnd` hooks time out after 1.5 s by default, so the endpoint must answer quickly.
 
 ### How Race Control answers `PreToolUse`
 
@@ -144,7 +153,11 @@ Starter rules to seed every new team:
 
 ## 6. Privacy and security
 
-- **Redact before storing.** Strip anything that looks like a secret (API keys, tokens, passwords, private keys) from `tool_input`, the same idea as errbuddy's sanitizer.
+- **Redact before storing.** Two layers (`apps/server/src/lib/redact.ts`):
+  1. **Allowlist per tool:** keep only what's needed to understand the call: the command for Bash, the file path for Edit, Write and Read, the URL without its query string for WebFetch, the description for Agent. File contents, edits, prompts, replies and tool output are never stored. MCP and unknown tools keep only their name.
+  2. **Scrub secrets** in what's left: Race Control `rc_` tokens, Anthropic, OpenAI, Stripe, GitHub, AWS, Slack and Google keys, JWTs, private-key blocks, credentials in URLs, `Authorization` values, and `password=` / `token:` / `--api-key`-style values all become `[REDACTED]`.
+
+  Paths are stored relative to the session folder, or with the home folder shown as `~`, so usernames aren't stored.
 - **Store metadata, not content.** Keep the command, file path, tool name and outcome. Don't store file contents or diffs in the MVP. Prompts (`UserPromptSubmit`) are not collected.
 - **Tokens:** generate random tokens, store only a hash, show the token once, and allow revoking. Developer tokens look like `rc_<43 chars>` so secret scanners and our own redaction can recognise them. A token belongs to one team; developers manage their own (up to 10 active), leads can see and revoke everyone's. Removing a member deletes their tokens. `last_used_at` is updated at most every 5 minutes.
 - **Team isolation:** every query is scoped by `teamId` from the authenticated token or session. Add tests that prove one team can't read another's data. In the API, a `:teamId` in the URL is only used after the user's membership is confirmed; teams you aren't in answer `404`, exactly like teams that don't exist.
@@ -160,7 +173,7 @@ users(id, email, name, created_at)
 memberships(team_id, user_id, role: lead|developer)
 dev_tokens(id, team_id, user_id, token_hash, label, last_used_at, revoked_at)
 sessions(id, team_id, user_id, agent: claude_code|codex, agent_session_id, repo_name, cwd,
-         started_at, ended_at, status: active|idle|ended)
+         started_at, ended_at, last_event_at, status: active|idle|ended)
 events(id, team_id, session_id, type, tool_name, target, summary, payload_redacted jsonb,
        decision: allow|deny|ask|none|pending, created_at)
 rules(id, team_id, name, tool, pattern, action: block|approve, mode: enforce|shadow, enabled,

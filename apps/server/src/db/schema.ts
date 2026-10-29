@@ -117,11 +117,14 @@ export const sessions = pgTable(
     startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
     endedAt: timestamp('ended_at', { withTimezone: true }),
     status: sessionStatusEnum('status').notNull().default('active'),
+    // When the session's latest hook event arrived. The live team view sorts and fades by this.
+    lastEventAt: timestamp('last_event_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     unique('sessions_team_id_key').on(t.teamId, t.id),
     unique('sessions_agent_session_key').on(t.teamId, t.agent, t.agentSessionId),
     index('sessions_team_started_idx').on(t.teamId, t.startedAt.desc()),
+    index('sessions_team_last_event_idx').on(t.teamId, t.lastEventAt.desc()),
   ],
 );
 
