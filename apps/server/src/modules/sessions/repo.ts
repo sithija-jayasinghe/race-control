@@ -1,9 +1,9 @@
-import { desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import type { DbOrTx } from '../../db/client.ts';
 import { events, sessions, users } from '../../db/schema.ts';
 
-/** A team's most recently active sessions, newest first, with each one's latest action. */
-export async function listRecentSessions(db: DbOrTx, teamId: string, limit: number) {
+/** Sessions with who ran them and their latest action. Always filtered by team by the callers below. */
+function selectSessionViews(db: DbOrTx, teamId: string) {
   return db
     .select({
       id: sessions.id,
@@ -23,8 +23,31 @@ export async function listRecentSessions(db: DbOrTx, teamId: string, limit: numb
       )`,
     })
     .from(sessions)
-    .innerJoin(users, eq(users.id, sessions.userId))
+    .innerJoin(users, eq(users.id, sessions.userId));
+}
+
+export type SessionView = Awaited<ReturnType<typeof listRecentSessions>>[number];
+
+/** A team's most recently active sessions, newest first, with each one's latest action. */
+export async function listRecentSessions(db: DbOrTx, teamId: string, limit: number) {
+  return selectSessionViews(db, teamId)
     .where(eq(sessions.teamId, teamId))
     .orderBy(desc(sessions.lastEventAt))
     .limit(limit);
+}
+
+/** One session of this team, or null. */
+export async function findSessionView(db: DbOrTx, teamId: string, sessionId: string): Promise<SessionView | null> {
+  const [row] = await selectSessionViews(db, teamId).where(and(eq(sessions.teamId, teamId), eq(sessions.id, sessionId)));
+  return row ?? null;
+}
+
+/** Dates as ISO strings, the shape the API and live channel send. */
+export function serializeSession(s: SessionView) {
+  return {
+    ...s,
+    startedAt: s.startedAt.toISOString(),
+    lastEventAt: s.lastEventAt.toISOString(),
+    endedAt: s.endedAt?.toISOString() ?? null,
+  };
 }

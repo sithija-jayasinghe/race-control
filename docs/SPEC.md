@@ -163,6 +163,7 @@ Starter rules to seed every new team:
 - **Team isolation:** every query is scoped by `teamId` from the authenticated token or session. Add tests that prove one team can't read another's data. In the API, a `:teamId` in the URL is only used after the user's membership is confirmed; teams you aren't in answer `404`, exactly like teams that don't exist.
 - **Invites** are reusable links that expire after 7 days and can be revoked by a lead. Like magic links, the token sits in the URL fragment and only its hash is stored. A team always keeps at least one lead.
 - **Rate limit** the ingest endpoints per token.
+- **Live channel** (`GET /teams/:teamId/live`, WebSocket): only signed-in members of the team, and only from the dashboard's own origin (`WEB_URL`), because browsers send cookies on WebSocket handshakes from any site. Each team is its own channel inside the server, and only redacted metadata is sent.
 - **Agent-to-agent text is untrusted.** Anything Race Control puts into an agent's context (Team Radio) could be used for prompt injection. Heads-ups are built by the server from stored metadata (who, which file, when, which agent), never from free text another agent wrote. Free-text notes (Phase 2) are length-limited, redacted, clearly labelled as information rather than instructions, and a lead can turn them off.
 
 ## 7. Data model

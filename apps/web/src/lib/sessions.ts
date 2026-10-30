@@ -3,12 +3,17 @@ import { useQuery } from '@tanstack/react-query';
 import { z } from 'zod';
 import { api } from '@/lib/api';
 
-/** The team's most recent agent sessions. Polled until the live WebSocket feed arrives (Week 3). */
-export function useSessions(teamId: string) {
+export const sessionsKey = (teamId: string) => ['teams', teamId, 'sessions'] as const;
+
+/**
+ * The team's most recent agent sessions. The live channel keeps them current; `poll` refreshes every
+ * 10 s instead, for while that channel is down.
+ */
+export function useSessions(teamId: string, options: { poll?: boolean } = {}) {
   return useQuery({
-    queryKey: ['teams', teamId, 'sessions'],
+    queryKey: sessionsKey(teamId),
     queryFn: () => api(`/teams/${teamId}/sessions`, { schema: z.array(agentSessionSchema) }),
-    refetchInterval: 10_000,
+    refetchInterval: options.poll === false ? false : 10_000,
   });
 }
 

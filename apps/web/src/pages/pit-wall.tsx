@@ -4,6 +4,7 @@ import { useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { AppShell } from '@/components/app-shell';
 import { LightsOut } from '@/components/lights-out';
+import { LiveBadge } from '@/components/live-badge';
 import { LiveClock } from '@/components/live-clock';
 import { Panel } from '@/components/panel';
 import { RaceControlBanner } from '@/components/race-control-banner';
@@ -129,9 +130,9 @@ function SessionRow({ session }: { session: AgentSession }) {
  * then the team's sessions as soon as agents report in.
  */
 function Track({ onDemo }: { onDemo: () => void }) {
-  const { me, team } = useTeamContext();
+  const { me, team, live } = useTeamContext();
   const tokens = useTokens(team.id);
-  const sessions = useSessions(team.id);
+  const sessions = useSessions(team.id, { poll: live !== 'live' });
   const hasToken = (tokens.data ?? []).some((t) => t.userId === me.user.id);
   const connected = (sessions.data ?? []).some((s) => s.userId === me.user.id);
   const active = (sessions.data ?? []).filter((s) => s.status === 'active').length;
@@ -145,7 +146,7 @@ function Track({ onDemo }: { onDemo: () => void }) {
           {active > 0 ? `${active} ${active === 1 ? 'car' : 'cars'} on track` : 'No cars on track'}
         </h1>
         <p className="text-muted-foreground">
-          {hasSessions ? 'The live map arrives next. For now, here is every session as it reports in.' : 'Connect an agent and it shows up here, live.'}
+          {hasSessions ? 'Every session, as it reports in.' : 'Connect an agent and it shows up here, live.'}
         </p>
       </div>
 
@@ -202,7 +203,7 @@ function Track({ onDemo }: { onDemo: () => void }) {
 }
 
 export function PitWallPage() {
-  const { me, team } = useTeamContext();
+  const { me, team, live } = useTeamContext();
   const [params, setParams] = useSearchParams();
   const demo = params.get('demo') === '1';
 
@@ -215,7 +216,13 @@ export function PitWallPage() {
         active="pit-wall"
         userEmail={me.user.email}
         counts={demo ? countByStatus(DEMO_DRIVERS) : undefined}
-        actions={demo ? <LiveClock since={DEMO_START} className="hidden sm:inline-flex" /> : undefined}
+        actions={
+          demo ? (
+            <LiveClock since={DEMO_START} className="hidden sm:inline-flex" />
+          ) : (
+            <LiveBadge status={live} className="hidden sm:inline-flex" />
+          )
+        }
       >
         {demo ? (
           <>

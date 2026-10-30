@@ -23,12 +23,7 @@ export function sessionRoutes(app: FastifyInstance, deps: AppDeps) {
     },
     async (request) => {
       const rows = await repo.listRecentSessions(deps.db, getTeamAuth(request).teamId, LIST_LIMIT);
-      return rows.map((s) => ({
-        ...s,
-        startedAt: s.startedAt.toISOString(),
-        lastEventAt: s.lastEventAt.toISOString(),
-        endedAt: s.endedAt?.toISOString() ?? null,
-      }));
+      return rows.map(repo.serializeSession);
     },
   );
 

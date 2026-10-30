@@ -37,6 +37,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Connect Claude Code: Settings shows the `.claude/settings.json` hooks for your server, for one project or all of yours, with a copy button. The token is read from `RACE_CONTROL_TOKEN`, so the file can be committed for the whole team.
 - The Pit wall lists the team's sessions as they report in (status, who, repo, last action), counts the cars on track, and hides the setup steps once your own agent is connected.
 - Session simulator: `pnpm simulate` replays a scripted race of five demo drivers (a shared-file collision, a migration, a failing test, a `.env` edit, a secret in a command) through the real hook endpoint in a "Demo team". `--viewer` adds you to watch, `--loop` and `--speed` control the race, `--reset` removes the demo data. Refuses to run in production.
+- Live updates: the dashboard keeps a WebSocket open to the team's live channel, so new sessions and events appear the moment agents report them. A LIVE badge shows the connection; if it drops, the page reconnects by itself and refreshes every 10 seconds meanwhile. Only members of the team, on the dashboard's own site, can connect.
 
 ### Removed
 - `SESSION_SECRET` from `.env.example`. Login sessions are looked up by hash, so nothing needs signing.

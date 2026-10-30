@@ -1,6 +1,7 @@
 import type { HookPayload, IngestedHookEvent, SessionStatus } from '@race-control/shared';
 import type { AppDeps } from '../../app.ts';
 import { errorHeadline, hideHome, recordToolCall, redactSecrets, repoNameFromCwd } from '../../lib/redact.ts';
+import { findSessionView, serializeSession } from '../sessions/repo.ts';
 import type { DevTokenAuth } from '../tokens/service.ts';
 import * as repo from './repo.ts';
 
@@ -74,7 +75,7 @@ function compact(value: Record<string, unknown>): Record<string, unknown> {
 
 /** Records one hook event for the token's team and developer. */
 export async function ingestHookEvent<E extends IngestedHookEvent>(
-  deps: Pick<AppDeps, 'db' | 'now'>,
+  deps: Pick<AppDeps, 'db' | 'now' | 'bus'>,
   auth: DevTokenAuth,
   event: E,
   payload: HookPayload<E>,
@@ -82,7 +83,8 @@ export async function ingestHookEvent<E extends IngestedHookEvent>(
   const now = deps.now();
   const stored = toStoredEvent(event, payload);
 
-  await deps.db.transaction(async (tx) => {
+  const decision = 'none' as const;
+  const ids = await deps.db.transaction(async (tx) => {
     const sessionId = await repo.upsertSession(tx, {
       teamId: auth.teamId,
       userId: auth.userId,
@@ -93,7 +95,7 @@ export async function ingestHookEvent<E extends IngestedHookEvent>(
       ended: event === 'SessionEnd',
       now,
     });
-    await repo.insertEvent(tx, {
+    const eventId = await repo.insertEvent(tx, {
       teamId: auth.teamId,
       sessionId,
       type: event,
@@ -102,8 +104,26 @@ export async function ingestHookEvent<E extends IngestedHookEvent>(
       summary: stored.summary,
       payloadRedacted: compact(stored.payload),
       // Guardrails arrive in Week 4; until then Race Control never decides.
-      decision: 'none',
+      decision,
       createdAt: now,
     });
+    return { sessionId, eventId };
+  });
+
+  // Tell the team's dashboards, after the data is saved. Only redacted metadata goes out.
+  const session = await findSessionView(deps.db, auth.teamId, ids.sessionId);
+  if (session) deps.bus.publish(auth.teamId, { type: 'session', session: serializeSession(session) });
+  deps.bus.publish(auth.teamId, {
+    type: 'event',
+    event: {
+      id: ids.eventId,
+      sessionId: ids.sessionId,
+      type: event,
+      toolName: stored.toolName,
+      target: stored.target,
+      summary: stored.summary,
+      decision,
+      createdAt: now.toISOString(),
+    },
   });
 }

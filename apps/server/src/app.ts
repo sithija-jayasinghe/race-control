@@ -1,12 +1,15 @@
 import cookie from '@fastify/cookie';
+import websocket from '@fastify/websocket';
 import rateLimit from '@fastify/rate-limit';
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastify';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import type { Database } from './db/client.ts';
 import { registerErrorHandler } from './lib/errors.ts';
+import { TeamBus } from './lib/team-bus.ts';
 import type { Mailer } from './lib/mailer.ts';
 import { authRoutes } from './modules/auth/routes.ts';
 import { hookRoutes } from './modules/hooks/routes.ts';
+import { liveRoutes } from './modules/sessions/live.ts';
 import { sessionRoutes } from './modules/sessions/routes.ts';
 import { inviteRoutes } from './modules/invites/routes.ts';
 import { teamRoutes } from './modules/teams/routes.ts';
@@ -26,15 +29,23 @@ export type AppDeps = {
   cookieSecure: boolean;
   /** The current time. Tests pass a fake clock. */
   now: () => Date;
+  /** Live messages for each team's dashboards. */
+  bus: TeamBus;
 };
 
-export type BuildAppOptions = Omit<AppDeps, 'now'> & {
+export type BuildAppOptions = Omit<AppDeps, 'now' | 'bus'> & {
   now?: () => Date;
+  bus?: TeamBus;
   logger?: FastifyServerOptions['logger'];
 };
 
-export async function buildApp({ logger, now = () => new Date(), ...rest }: BuildAppOptions): Promise<FastifyInstance> {
-  const deps: AppDeps = { ...rest, now };
+export async function buildApp({
+  logger,
+  now = () => new Date(),
+  bus = new TeamBus(),
+  ...rest
+}: BuildAppOptions): Promise<FastifyInstance> {
+  const deps: AppDeps = { ...rest, now, bus };
   const app = Fastify({
     logger: logger ?? { redact: ['req.headers.authorization', 'req.headers.cookie'] },
   });
@@ -45,6 +56,7 @@ export async function buildApp({ logger, now = () => new Date(), ...rest }: Buil
   // Awaited so their hooks are in place before ours and before any route is added.
   await app.register(cookie);
   await app.register(rateLimit, { global: false });
+  await app.register(websocket);
   registerAuth(app, deps);
   registerTeamAccess(app);
   registerDevTokenAuth(app);
@@ -56,6 +68,7 @@ export async function buildApp({ logger, now = () => new Date(), ...rest }: Buil
   tokenRoutes(app, deps);
   hookRoutes(app, deps);
   sessionRoutes(app, deps);
+  liveRoutes(app, deps);
 
   return app;
 }
