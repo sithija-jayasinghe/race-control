@@ -1,13 +1,17 @@
+import type { AgentSession } from '@race-control/shared';
 import { Check, Lock } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { AppShell } from '@/components/app-shell';
 import { LightsOut } from '@/components/lights-out';
 import { LiveClock } from '@/components/live-clock';
+import { Panel } from '@/components/panel';
 import { RaceControlBanner } from '@/components/race-control-banner';
-import type { FlagStatus } from '@/components/status-flag';
+import { StatusFlag, type FlagStatus } from '@/components/status-flag';
 import { TeamRadioCard } from '@/components/team-radio-card';
 import { TimingTower, type Driver } from '@/components/timing-tower';
+import { useSessions } from '@/lib/sessions';
+import { timeAgo } from '@/lib/time';
 import { useTokens } from '@/lib/tokens';
 import { cn } from '@/lib/utils';
 import { useTeamContext } from '@/routes';
@@ -96,41 +100,92 @@ function Step({
   );
 }
 
-/** What a team sees before any agent is connected: an empty track and the three steps to put a car on it. */
-function EmptyTrack({ onDemo }: { onDemo: () => void }) {
+function SessionRow({ session }: { session: AgentSession }) {
+  const who = session.userName ?? session.userEmail;
+  const status = session.status === 'active' ? 'working' : 'idle';
+  return (
+    <li className="flex items-center gap-3 border-t border-white/5 px-4 py-3 first:border-t-0">
+      {session.status === 'ended' ? (
+        <span className="w-[86px] shrink-0 text-sm text-muted-foreground">Ended</span>
+      ) : (
+        <StatusFlag status={status} className="w-[86px] shrink-0" />
+      )}
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm">
+          {who}
+          {session.repoName && <span className="text-muted-foreground"> · {session.repoName}</span>}
+        </span>
+        {session.lastAction && (
+          <span className="block truncate font-mono text-xs text-muted-foreground">{session.lastAction}</span>
+        )}
+      </span>
+      <span className="shrink-0 text-xs text-muted-foreground">{timeAgo(session.lastEventAt)}</span>
+    </li>
+  );
+}
+
+/**
+ * The Pit wall until the live map arrives (Week 3): an empty track with the steps to connect,
+ * then the team's sessions as soon as agents report in.
+ */
+function Track({ onDemo }: { onDemo: () => void }) {
   const { me, team } = useTeamContext();
   const tokens = useTokens(team.id);
+  const sessions = useSessions(team.id);
   const hasToken = (tokens.data ?? []).some((t) => t.userId === me.user.id);
+  const connected = (sessions.data ?? []).some((s) => s.userId === me.user.id);
+  const active = (sessions.data ?? []).filter((s) => s.status === 'active').length;
+  const hasSessions = (sessions.data ?? []).length > 0;
 
   return (
     <div className="mx-auto flex min-h-[calc(100dvh-10rem)] max-w-xl flex-col justify-center gap-6 py-6">
       <div className="space-y-2 text-center">
         <p className="broadcast text-sm text-f1">Pit wall</p>
-        <h1 className="broadcast text-4xl sm:text-5xl">No cars on track</h1>
-        <p className="text-muted-foreground">Connect an agent and it shows up here, live.</p>
+        <h1 className="broadcast text-4xl sm:text-5xl">
+          {active > 0 ? `${active} ${active === 1 ? 'car' : 'cars'} on track` : 'No cars on track'}
+        </h1>
+        <p className="text-muted-foreground">
+          {hasSessions ? 'The live map arrives next. For now, here is every session as it reports in.' : 'Connect an agent and it shows up here, live.'}
+        </p>
       </div>
 
-      <ol aria-label="Connect your agent" className="glass overflow-hidden rounded-xl">
-        <Step number={1} done={hasToken} title="Create an agent token">
-          {hasToken ? (
-            'Done. Make one for each machine you use.'
-          ) : (
-            <>
-              One per machine, in{' '}
-              <Link to={`/t/${team.id}/settings`} className="text-foreground underline underline-offset-2">
-                Settings
-              </Link>
-              .
-            </>
-          )}
-        </Step>
-        <Step number={2} locked title="Add Race Control's hooks to Claude Code">
-          Arrives with the next update: a settings snippet to paste into your project.
-        </Step>
-        <Step number={3} locked title="Start a coding session">
-          Your agent appears on this track, with every tool call, flag and approval.
-        </Step>
-      </ol>
+      {!connected && (
+        <ol aria-label="Connect your agent" className="glass overflow-hidden rounded-xl">
+          <Step number={1} done={hasToken} title="Create an agent token">
+            {hasToken ? (
+              'Done. Make one for each machine you use.'
+            ) : (
+              <>
+                One per machine, in{' '}
+                <Link to={`/t/${team.id}/settings`} className="text-foreground underline underline-offset-2">
+                  Settings
+                </Link>
+                .
+              </>
+            )}
+          </Step>
+          <Step number={2} title="Add Race Control's hooks to Claude Code">
+            Copy the settings from{' '}
+            <Link to={`/t/${team.id}/settings#connect`} className="text-foreground underline underline-offset-2">
+              Connect Claude Code
+            </Link>{' '}
+            into your project.
+          </Step>
+          <Step number={3} title="Start a coding session">
+            Your agent appears here within seconds of its first action.
+          </Step>
+        </ol>
+      )}
+
+      {hasSessions && (
+        <Panel title="Sessions" aside={<span className="font-mono text-[11px] text-muted-foreground">{sessions.data!.length}</span>}>
+          <ul aria-label="Sessions">
+            {sessions.data!.map((session) => (
+              <SessionRow key={session.id} session={session} />
+            ))}
+          </ul>
+        </Panel>
+      )}
 
       <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm">
         <button type="button" onClick={onDemo} className="text-foreground underline underline-offset-4">
@@ -168,7 +223,7 @@ export function PitWallPage() {
             <DemoRace onExit={() => setParams({})} />
           </>
         ) : (
-          <EmptyTrack onDemo={() => setParams({ demo: '1' })} />
+          <Track onDemo={() => setParams({ demo: '1' })} />
         )}
       </AppShell>
     </>

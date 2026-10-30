@@ -50,3 +50,34 @@ export const hookPayloadSchemas = {
 } satisfies Record<IngestedHookEvent, z.ZodType>;
 
 export type HookPayload<E extends IngestedHookEvent> = z.infer<(typeof hookPayloadSchemas)[E]>;
+
+/** The environment variable that holds a developer's token on their machine. */
+export const TOKEN_ENV_VAR = 'RACE_CONTROL_TOKEN';
+
+/**
+ * The `hooks` block of `.claude/settings.json` that sends a developer's agent activity to Race Control
+ * (SPEC section 4). The token is read from the environment, never written into the file, so the file
+ * can be committed and shared by the whole team.
+ */
+export function buildHookSettings(hooksUrl: string) {
+  const base = hooksUrl.replace(/\/+$/, '');
+  const hook = (event: IngestedHookEvent, timeout?: number) => ({
+    type: 'http' as const,
+    url: `${base}/${event}`,
+    ...(timeout === undefined ? {} : { timeout }),
+    headers: { Authorization: `Bearer $${TOKEN_ENV_VAR}` },
+    allowedEnvVars: [TOKEN_ENV_VAR],
+  });
+  const toolHooks = (event: IngestedHookEvent, timeout?: number) => [{ matcher: '*', hooks: [hook(event, timeout)] }];
+  return {
+    hooks: {
+      SessionStart: [{ hooks: [hook('SessionStart')] }],
+      // 300 s leaves room for a lead to answer an approval (Week 4); today the answer is immediate.
+      PreToolUse: toolHooks('PreToolUse', 300),
+      PostToolUse: toolHooks('PostToolUse'),
+      PostToolUseFailure: toolHooks('PostToolUseFailure'),
+      Stop: [{ hooks: [hook('Stop')] }],
+      SessionEnd: [{ hooks: [hook('SessionEnd')] }],
+    },
+  };
+}

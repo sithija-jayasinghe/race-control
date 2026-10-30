@@ -5,6 +5,7 @@ import { SESSION_COOKIE } from '../../src/plugins/auth.ts';
 import { createTestDb, type TestDb } from './db.ts';
 
 export const TEST_WEB_URL = 'http://web.test';
+export const TEST_PUBLIC_URL = 'http://api.test';
 
 /** A clock that only moves when a test moves it. */
 export function createClock(start = new Date('2026-10-28T09:00:00Z')) {
@@ -45,6 +46,7 @@ export async function createTestApp(options: { cookieSecure?: boolean } = {}): P
     db,
     mailer,
     webUrl: TEST_WEB_URL,
+    publicUrl: TEST_PUBLIC_URL,
     cookieSecure: options.cookieSecure ?? false,
     now: clock.now,
     logger: false,

@@ -2,7 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import { timeAgo } from '../src/lib/time.ts';
-import { TEAM, TEAMMATE, USER, fakeServer, renderApp } from './helpers.tsx';
+import { TEAM, TEAMMATE, USER, agentSession, fakeServer, renderApp } from './helpers.tsx';
 
 const openSettings = () => renderApp(`/t/${TEAM.id}/settings`);
 
@@ -107,5 +107,33 @@ describe('timeAgo', () => {
     ['2026-10-19T12:00:00Z', '10 days ago'],
   ])('%s → %s', (iso, text) => {
     expect(timeAgo(iso, now)).toBe(text);
+  });
+});
+
+describe('connect Claude Code', () => {
+  it('shows hook settings for this server that read the token from the environment', async () => {
+    fakeServer({ signedIn: true });
+    openSettings();
+    const user = userEvent.setup();
+
+    const snippet = await screen.findByLabelText('Hook settings');
+    expect(snippet).toHaveTextContent('"url": "http://api.test/hooks/PreToolUse"');
+    expect(snippet).toHaveTextContent('"Authorization": "Bearer $RACE_CONTROL_TOKEN"');
+    expect(screen.getByText('.claude/settings.json')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('radio', { name: 'All my projects' }));
+    expect(screen.getByText('~/.claude/settings.json')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Copy hook settings' }));
+    const copied = JSON.parse(await navigator.clipboard.readText()) as { hooks: Record<string, unknown> };
+    expect(Object.keys(copied.hooks)).toContain('SessionEnd');
+  });
+
+  it('confirms the connection once your agent has reported', async () => {
+    const server = fakeServer({ signedIn: true });
+    server.state.sessions.set(TEAM.id, [agentSession()]);
+    openSettings();
+
+    expect(await screen.findByText(/Connected. Your last activity arrived/)).toBeInTheDocument();
   });
 });

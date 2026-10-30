@@ -28,6 +28,7 @@ describe('error handling', () => {
       db: failingDb(),
       mailer: createMemoryMailer().mailer,
       webUrl: 'http://web.test',
+      publicUrl: 'http://api.test',
       cookieSecure: false,
       now: createClock().now,
       logger: { level: 'error', stream: { write: (line: string) => logs.push(line) } },

@@ -7,6 +7,7 @@ import { registerErrorHandler } from './lib/errors.ts';
 import type { Mailer } from './lib/mailer.ts';
 import { authRoutes } from './modules/auth/routes.ts';
 import { hookRoutes } from './modules/hooks/routes.ts';
+import { sessionRoutes } from './modules/sessions/routes.ts';
 import { inviteRoutes } from './modules/invites/routes.ts';
 import { teamRoutes } from './modules/teams/routes.ts';
 import { tokenRoutes } from './modules/tokens/routes.ts';
@@ -19,6 +20,8 @@ export type AppDeps = {
   mailer: Mailer;
   /** Base URL of the dashboard, used in magic links. */
   webUrl: string;
+  /** Base URL agents use to reach this server, used in the hook settings. */
+  publicUrl: string;
   /** Send cookies only over HTTPS. True in production. */
   cookieSecure: boolean;
   /** The current time. Tests pass a fake clock. */
@@ -52,6 +55,7 @@ export async function buildApp({ logger, now = () => new Date(), ...rest }: Buil
   inviteRoutes(app, deps);
   tokenRoutes(app, deps);
   hookRoutes(app, deps);
+  sessionRoutes(app, deps);
 
   return app;
 }

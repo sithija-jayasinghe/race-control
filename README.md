@@ -92,6 +92,8 @@ pnpm dev        # server on :4000, web app on :5173
 
 Any Postgres works: [Postgres.app](https://postgresapp.com) on a Mac, Docker, or a free Neon database. In development there's no email service, so **sign-in links are printed in the server's console**.
 
+To connect your own Claude Code: sign in, create a token in **Settings**, add its `export RACE_CONTROL_TOKEN=…` line to your shell profile, and copy the hook settings from **Connect Claude Code** into your project's `.claude/settings.json`. Your sessions then appear on the Pit wall.
+
 | Command | What it does |
 |---|---|
 | `pnpm lint` / `pnpm typecheck` / `pnpm test` | The checks CI runs. Tests need no database: they use an in-memory Postgres ([why](docs/decisions/0001-pglite-for-database-tests.md)) |
