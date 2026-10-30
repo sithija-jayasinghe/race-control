@@ -8,6 +8,7 @@
   },
   "scripts": {
     "dev": "pnpm -r --parallel --if-present dev",
+    "simulate": "pnpm --filter @race-control/server run simulate",
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.json && pnpm -r --if-present typecheck",
     "test": "vitest run",

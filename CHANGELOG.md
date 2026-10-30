@@ -36,6 +36,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Secret redaction before anything is stored: only the command, file path or URL of each tool call is kept (never file contents, prompts, replies or tool output), and API keys, tokens, passwords and private keys are replaced with `[REDACTED]`.
 - Connect Claude Code: Settings shows the `.claude/settings.json` hooks for your server, for one project or all of yours, with a copy button. The token is read from `RACE_CONTROL_TOKEN`, so the file can be committed for the whole team.
 - The Pit wall lists the team's sessions as they report in (status, who, repo, last action), counts the cars on track, and hides the setup steps once your own agent is connected.
+- Session simulator: `pnpm simulate` replays a scripted race of five demo drivers (a shared-file collision, a migration, a failing test, a `.env` edit, a secret in a command) through the real hook endpoint in a "Demo team". `--viewer` adds you to watch, `--loop` and `--speed` control the race, `--reset` removes the demo data. Refuses to run in production.
 
 ### Removed
 - `SESSION_SECRET` from `.env.example`. Login sessions are looked up by hash, so nothing needs signing.

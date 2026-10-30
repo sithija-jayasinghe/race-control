@@ -67,8 +67,8 @@ See [docs/SPEC.md](docs/SPEC.md) for the full design: data model, guardrail engi
 
 ## Roadmap
 
-- [ ] **Week 1 — Foundations:** monorepo, database schema, auth, teams and developer tokens
-- [ ] **Week 2 — Ingestion:** hook endpoints, secret redaction, session tracking and the simulator
+- [x] **Week 1 — Foundations:** monorepo, database schema, auth, teams and developer tokens
+- [x] **Week 2 — Ingestion:** hook endpoints, secret redaction, session tracking and the simulator
 - [ ] **Week 3 — Live dashboard:** WebSocket feed, team view, session timelines, yellow flags and Team Radio heads-ups
 - [ ] **Week 4 — Guardrails and approvals:** rules engine with shadow mode, approval flow and mobile approval screen
 - [ ] **Week 5 — Real-world test:** a week of use with a real 10-developer team
@@ -99,6 +99,8 @@ To connect your own Claude Code: sign in, create a token in **Settings**, add it
 | `pnpm lint` / `pnpm typecheck` / `pnpm test` | The checks CI runs. Tests need no database: they use an in-memory Postgres ([why](docs/decisions/0001-pglite-for-database-tests.md)) |
 | `pnpm --filter @race-control/server db:generate` | Create a new SQL migration after changing `apps/server/src/db/schema.ts` |
 | `pnpm --filter @race-control/server db:migrate` | Apply migrations to the Postgres in `DATABASE_URL` (Neon, Postgres.app or Docker) |
+| `pnpm simulate --viewer you@example.com` | With `pnpm dev` running: five demo drivers race through the real hook endpoint in a "Demo team" you can watch. Add `--loop` to keep going, `--speed 4` to play faster |
+| `pnpm simulate --reset` | Delete the Demo team, its sessions and the demo users |
 
 ## Contributing
 
