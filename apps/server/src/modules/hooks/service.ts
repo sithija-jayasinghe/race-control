@@ -1,6 +1,7 @@
-import type { HookPayload, IngestedHookEvent, SessionStatus } from '@race-control/shared';
+import { EDIT_TOOLS, type HookPayload, type IngestedHookEvent, type SessionStatus } from '@race-control/shared';
 import type { AppDeps } from '../../app.ts';
 import { errorHeadline, hideHome, recordToolCall, redactSecrets, repoNameFromCwd } from '../../lib/redact.ts';
+import { findYellowFlags } from '../flags/repo.ts';
 import { findSessionView, serializeSession } from '../sessions/repo.ts';
 import type { DevTokenAuth } from '../tokens/service.ts';
 import * as repo from './repo.ts';
@@ -126,4 +127,11 @@ export async function ingestHookEvent<E extends IngestedHookEvent>(
       createdAt: now.toISOString(),
     },
   });
+
+  // An edit may raise or extend a yellow flag on that file.
+  const editTools: readonly string[] = EDIT_TOOLS;
+  if (event === 'PreToolUse' && stored.target && session?.repoName && editTools.includes(stored.toolName ?? '')) {
+    const [flag] = await findYellowFlags(deps.db, auth.teamId, now, { repoName: session.repoName, target: stored.target });
+    if (flag) deps.bus.publish(auth.teamId, { type: 'flag', flag });
+  }
 }

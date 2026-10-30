@@ -1,3 +1,4 @@
+import { X } from 'lucide-react';
 import { FLAGS, type FlagStatus } from '@/components/status-flag';
 
 /** Banner names for the flags, as Race Control messages show them. */
@@ -13,10 +14,12 @@ export function RaceControlBanner({
   status,
   message,
   detail,
+  onDismiss,
 }: {
   status: FlagStatus;
   message: string;
   detail?: string;
+  onDismiss?: () => void;
 }) {
   const color = FLAGS[status].color;
   return (
@@ -38,6 +41,16 @@ export function RaceControlBanner({
           </span>
         )}
       </span>
+      {onDismiss && (
+        <button
+          type="button"
+          aria-label="Dismiss"
+          onClick={onDismiss}
+          className="flex min-w-10 items-center justify-center border-l border-white/10 text-[#8b909a] hover:text-[#eceef2]"
+        >
+          <X className="size-3.5" aria-hidden="true" />
+        </button>
+      )}
     </div>
   );
 }

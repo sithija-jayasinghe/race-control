@@ -1,4 +1,4 @@
-import type { AgentSession, LiveEvent, TimelineEvent } from '@race-control/shared';
+import { EDIT_TOOLS, type AgentSession, type LiveEvent, type TimelineEvent } from '@race-control/shared';
 import { useQuery } from '@tanstack/react-query';
 import {
   Bot,
@@ -18,6 +18,7 @@ import { Link, useParams } from 'react-router';
 import { AppShell } from '@/components/app-shell';
 import { Panel } from '@/components/panel';
 import { StatusFlag } from '@/components/status-flag';
+import { activeFlags, useFlags } from '@/lib/flags';
 import { eventsKey } from '@/lib/live';
 import { sessionsKey, useSessionTimeline } from '@/lib/sessions';
 import { cn } from '@/lib/utils';
@@ -38,6 +39,8 @@ const TOOL_ICONS: Record<string, LucideIcon> = {
   Task: Bot,
 };
 
+const EDITS: readonly string[] = EDIT_TOOLS;
+
 const time = (iso: string) => new Date(iso).toLocaleTimeString([], { hour12: false });
 
 /**
@@ -55,7 +58,7 @@ export function mergeLive(fetched: TimelineEvent[], live: LiveEvent[], sessionId
   return [...fetched, ...newer].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 }
 
-function Step({ event }: { event: TimelineEvent }) {
+function Step({ event, flagged }: { event: TimelineEvent; flagged: boolean }) {
   let Icon: LucideIcon = TOOL_ICONS[event.toolName ?? ''] ?? Wrench;
   let label = event.summary ?? event.type;
   let tone = '';
@@ -75,6 +78,7 @@ function Step({ event }: { event: TimelineEvent }) {
     Icon = X;
     tone = 'text-flag-red';
   }
+  if (flagged) tone = 'text-flag-yellow';
   if (event.decision === 'deny') tone = 'text-flag-red';
   if (event.decision === 'pending') tone = 'text-flag-blue';
 
@@ -83,7 +87,10 @@ function Step({ event }: { event: TimelineEvent }) {
       <time className="pt-0.5 font-mono text-[11px] text-muted-foreground tabular-nums">{time(event.createdAt)}</time>
       <Icon className={cn('mt-0.5 size-4', tone || 'text-muted-foreground')} aria-hidden="true" />
       <span className="min-w-0">
-        <span className={cn('block truncate font-mono text-xs', tone)}>{label}</span>
+        <span className={cn('block truncate font-mono text-xs', tone)}>
+          {label}
+          {flagged && <span className="broadcast ml-2 rounded bg-flag-yellow px-1 text-[10px] text-[#0b0c0f]">Yellow flag</span>}
+        </span>
         {event.detail && <span className="block truncate font-mono text-[11px] text-muted-foreground">{event.detail}</span>}
       </span>
     </li>
@@ -124,7 +131,17 @@ export function SessionPage() {
     (s) => s.id === sessionId,
   );
 
+  const flags = useFlags(team.id).data ?? [];
+
   const session = liveSession ?? timeline.data?.session;
+  // Edits to a file this session shares with another one right now.
+  const flaggedFiles = new Set(
+    activeFlags(flags, Date.now())
+      .filter((f) => f.repoName === session?.repoName && f.drivers.some((d) => d.sessionId === sessionId))
+      .map((f) => f.target),
+  );
+  const isFlagged = (e: TimelineEvent) =>
+    e.type === 'PreToolUse' && EDITS.includes(e.toolName ?? '') && e.target !== null && flaggedFiles.has(e.target);
   const events = timeline.data ? timelineSteps(mergeLive(timeline.data.events, liveEvents, sessionId)) : [];
   const failures = events.filter((e) => e.type === 'PostToolUseFailure').length;
 
@@ -157,7 +174,7 @@ export function SessionPage() {
               )}
               <ol aria-label="Timeline" className="py-2">
                 {events.map((event) => (
-                  <Step key={event.id} event={event} />
+                  <Step key={event.id} event={event} flagged={isFlagged(event)} />
                 ))}
               </ol>
             </Panel>

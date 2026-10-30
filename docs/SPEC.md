@@ -232,7 +232,7 @@ Index `events(team_id, created_at desc)`, `events(session_id, created_at)` and `
 - WebSocket channel per team
 - Team view: who's active, on which repo, last action
 - Live event feed and per-session timeline
-- **Yellow flag:** highlight when two sessions touch the same `target` within a time window
+- **Yellow flag:** highlight when two people's sessions edit the same `target` in the same repo within a time window (30 minutes)
 - **Team Radio heads-ups:** reply to `PreToolUse` with `additionalContext` when another agent touched the same file recently
 
 **Week 4 — Guardrails and approvals**

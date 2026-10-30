@@ -1,4 +1,4 @@
-import type { AgentSession, DevToken, Invite, LiveEvent, Member, MeResponse, MyTeam, Role } from '@race-control/shared';
+import type { AgentSession, DevToken, Invite, LiveEvent, Member, MeResponse, MyTeam, Role, YellowFlag } from '@race-control/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render } from '@testing-library/react';
 import { StrictMode } from 'react';
@@ -44,6 +44,7 @@ export function fakeServer(options: { signedIn?: boolean; teams?: MeResponse['te
     invites: new Map<string, Invite[]>(),
     tokens: new Map<string, DevToken[]>(),
     sessions: new Map<string, AgentSession[]>(),
+    flags: new Map<string, YellowFlag[]>(),
     events: new Map<string, LiveEvent[]>(),
   };
   const calls: Array<{ method: string; path: string; body: unknown }> = [];
@@ -134,6 +135,7 @@ export function fakeServer(options: { signedIn?: boolean; teams?: MeResponse['te
     ],
     ['GET', /^\/teams\/([^/]+)\/sessions$/, (_, [teamId]) => ok(state.sessions.get(teamId!) ?? [])],
     ['GET', /^\/teams\/([^/]+)\/events$/, (_, [teamId]) => ok(state.events.get(teamId!) ?? [])],
+    ['GET', /^\/teams\/([^/]+)\/flags$/, (_, [teamId]) => ok(state.flags.get(teamId!) ?? [])],
     [
       'GET',
       /^\/teams\/([^/]+)\/sessions\/([^/]+)$/,
@@ -275,5 +277,24 @@ export function liveEvent(overrides: Partial<LiveEvent> = {}): LiveEvent {
     decision: 'none',
     createdAt: new Date().toISOString(),
     ...overrides,
+  };
+}
+
+/** A yellow flag on `target` for these sessions, most recent first, flying for another 20 minutes. */
+export function yellowFlag(sessions: AgentSession[], target = 'src/auth/session.ts'): YellowFlag {
+  const repoName = sessions[0]?.repoName ?? 'buildflow-api';
+  return {
+    id: `${repoName}:${target}`,
+    repoName,
+    target,
+    drivers: sessions.map((s) => ({
+      sessionId: s.id,
+      userId: s.userId,
+      userEmail: s.userEmail,
+      userName: s.userName,
+      agent: s.agent,
+      lastAt: s.lastEventAt,
+    })),
+    expiresAt: new Date(Date.now() + 20 * 60_000).toISOString(),
   };
 }

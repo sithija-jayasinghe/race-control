@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { COLLISION_MS, IDLE_ON_TRACK_MS, ON_TRACK_MS, buildTrackModel, driverCodes } from '../src/lib/track-model.ts';
-import { TEAMMATE, agentSession, liveEvent } from './helpers.tsx';
+import { IDLE_ON_TRACK_MS, ON_TRACK_MS, buildTrackModel, driverCodes } from '../src/lib/track-model.ts';
+import { TEAMMATE, agentSession, liveEvent, yellowFlag } from './helpers.tsx';
 
 const NOW = Date.parse('2026-10-30T12:00:00Z');
 const ago = (ms: number) => new Date(NOW - ms).toISOString();
@@ -55,34 +55,20 @@ describe('buildTrackModel', () => {
     expect(model.drivers[0]!.fileId).toBe('api:README.md');
   });
 
-  it('shows a yellow flag when two working agents are on the same file', () => {
-    const a = agentSession({ repoName: 'api', userName: 'Nimal', lastEventAt: ago(1000) });
-    const b = agentSession({ repoName: 'api', userName: 'Kasun', userId: TEAMMATE.id, lastEventAt: ago(1000) });
-    const c = agentSession({ repoName: 'api', userName: 'Ruwan', lastEventAt: ago(1000) });
-    const events = [
-      liveEvent({ sessionId: a.id, toolName: 'Edit', target: 'src/auth/session.ts', createdAt: ago(4000) }),
-      liveEvent({ sessionId: b.id, toolName: 'Edit', target: 'src/auth/session.ts', createdAt: ago(2000) }),
-      liveEvent({ sessionId: c.id, toolName: 'Edit', target: 'src/other.ts', createdAt: ago(2000) }),
-    ];
+  it("shows a yellow flag on working drivers in the server's flags", () => {
+    const a = agentSession({ userName: 'Nimal', lastEventAt: ago(1000) });
+    const b = agentSession({ userName: 'Kasun', userId: TEAMMATE.id, status: 'idle', lastEventAt: ago(1000) });
+    const c = agentSession({ userName: 'Ruwan', lastEventAt: ago(1000) });
+    const flags = [yellowFlag([a, b])];
 
-    const model = buildTrackModel([a, b, c], events, NOW);
+    const model = buildTrackModel([a, b, c], [], NOW, flags);
 
+    // Idle stays idle: the flag is about agents still working.
     expect(model.drivers.map((d) => [d.code, d.status])).toEqual([
       ['NIM', 'yellow'],
-      ['KAS', 'yellow'],
+      ['KAS', 'idle'],
       ['RUW', 'working'],
     ]);
-  });
-
-  it('drops the yellow flag once the shared file has been quiet for 30 minutes', () => {
-    const a = agentSession({ repoName: 'api', lastEventAt: ago(1000) });
-    const b = agentSession({ repoName: 'api', lastEventAt: ago(1000) });
-    const events = [
-      liveEvent({ sessionId: a.id, toolName: 'Edit', target: 'x.ts', createdAt: ago(COLLISION_MS + 5000) }),
-      liveEvent({ sessionId: b.id, toolName: 'Edit', target: 'x.ts', createdAt: ago(COLLISION_MS + 1000) }),
-    ];
-
-    expect(buildTrackModel([a, b], events, NOW).drivers.every((d) => d.status === 'working')).toBe(true);
   });
 
   it('colours sectors from the last three outcomes', () => {

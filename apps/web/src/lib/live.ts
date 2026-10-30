@@ -1,6 +1,7 @@
-import { liveMessageSchema, type AgentSession, type LiveEvent, type LiveMessage } from '@race-control/shared';
+import { liveMessageSchema, type AgentSession, type LiveEvent, type LiveMessage, type YellowFlag } from '@race-control/shared';
 import { useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
+import { flagsKey, upsertFlag } from '@/lib/flags';
 import { sessionsKey } from '@/lib/sessions';
 
 export type LiveStatus = 'connecting' | 'live' | 'offline';
@@ -17,7 +18,7 @@ function liveUrl(teamId: string): string {
   return `${scheme}://${window.location.host}/api/teams/${teamId}/live`;
 }
 
-/** Folds one live message into the cached sessions and feed. */
+/** Folds one live message into the cached sessions, feed and flags. */
 export function applyLiveMessage(queryClient: QueryClient, teamId: string, message: LiveMessage) {
   if (message.type === 'session') {
     queryClient.setQueryData<AgentSession[]>(sessionsKey(teamId), (old = []) =>
@@ -27,12 +28,14 @@ export function applyLiveMessage(queryClient: QueryClient, teamId: string, messa
     );
   } else if (message.type === 'event') {
     queryClient.setQueryData<LiveEvent[]>(eventsKey(teamId), (old = []) => [...old, message.event].slice(-MAX_EVENTS));
+  } else if (message.type === 'flag') {
+    queryClient.setQueryData<YellowFlag[]>(flagsKey(teamId), (old = []) => upsertFlag(old, message.flag));
   }
 }
 
 /**
  * Keeps a WebSocket open to the team's live channel and folds every message into the query cache.
- * Reconnects with backoff (1 s, 2 s, 4 s… up to 30 s) and re-fetches sessions after reconnecting,
+ * Reconnects with backoff (1 s, 2 s, 4 s… up to 30 s) and re-fetches sessions and flags after reconnecting,
  * so nothing that happened while offline is missed.
  */
 export function useLiveTeam(teamId: string): LiveStatus {
@@ -51,6 +54,7 @@ export function useLiveTeam(teamId: string): LiveStatus {
         attempt = 0;
         setStatus('live');
         void queryClient.invalidateQueries({ queryKey: sessionsKey(teamId) });
+        void queryClient.invalidateQueries({ queryKey: flagsKey(teamId) });
       };
       socket.onmessage = (event: MessageEvent) => {
         let data: unknown;

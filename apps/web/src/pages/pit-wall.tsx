@@ -1,4 +1,4 @@
-import type { AgentSession, LiveEvent } from '@race-control/shared';
+import type { AgentSession, LiveEvent, YellowFlag } from '@race-control/shared';
 import { Check, Lock } from 'lucide-react';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router';
@@ -12,8 +12,9 @@ import { StatusFlag, type FlagStatus } from '@/components/status-flag';
 import { TeamRadioCard } from '@/components/team-radio-card';
 import { TimingTower, type Driver } from '@/components/timing-tower';
 import { TrackMap } from '@/components/track-map';
+import { activeFlags, overlapKey, useFlags } from '@/lib/flags';
 import { useSessions, useTeamEvents } from '@/lib/sessions';
-import { buildTrackModel, type TrackDriver, type TrackModel } from '@/lib/track-model';
+import { buildTrackModel, driverCodes, type TrackDriver, type TrackModel } from '@/lib/track-model';
 import { timeAgo } from '@/lib/time';
 import { useTokens } from '@/lib/tokens';
 import { cn } from '@/lib/utils';
@@ -256,7 +257,51 @@ function DriverPanel({
 }
 
 /** Agents on track: the live map behind, the timing tower and the selected driver in front. */
-function LiveTrack({ model, events, sessions }: { model: TrackModel; events: LiveEvent[]; sessions: AgentSession[] }) {
+const MAX_BANNERS = 3;
+
+/** "NIM & KAS", "NIM, KAS & AMA": tower codes for drivers on track, short names for the rest. */
+function flagMessage(flag: YellowFlag, drivers: TrackDriver[]): string {
+  const codes = flag.drivers.map(
+    (d) => drivers.find((t) => t.sessionId === d.sessionId)?.code ?? driverCodes([d.userName ?? d.userEmail])[0]!,
+  );
+  const names = codes.length > 1 ? `${codes.slice(0, -1).join(', ')} & ${codes.at(-1)}` : codes.join('');
+  return `${names} · ${flag.repoName}`;
+}
+
+/** Race Control banners for the yellow flags, newest first. Dismissed ones return on a new overlap. */
+function FlagBanners({ flags, drivers }: { flags: YellowFlag[]; drivers: TrackDriver[] }) {
+  const [dismissed, setDismissed] = useState<ReadonlySet<string>>(() => new Set());
+  const shown = flags.filter((f) => !dismissed.has(overlapKey(f)));
+  if (shown.length === 0) return null;
+  return (
+    <div data-track-pass-through="" aria-label="Race Control" role="region" className="flex min-w-0 flex-1 flex-col items-center gap-2">
+      {shown.slice(0, MAX_BANNERS).map((flag) => (
+        <RaceControlBanner
+          key={flag.id}
+          status="yellow"
+          message={flagMessage(flag, drivers)}
+          detail={flag.target}
+          onDismiss={() => setDismissed((old) => new Set(old).add(overlapKey(flag)))}
+        />
+      ))}
+      {shown.length > MAX_BANNERS && (
+        <span className="glass rounded-md px-2 py-0.5 text-xs text-muted-foreground">+{shown.length - MAX_BANNERS} more</span>
+      )}
+    </div>
+  );
+}
+
+function LiveTrack({
+  model,
+  events,
+  sessions,
+  flags,
+}: {
+  model: TrackModel;
+  events: LiveEvent[];
+  sessions: AgentSession[];
+  flags: YellowFlag[];
+}) {
   const { me, team } = useTeamContext();
   const [selectedId, setSelectedId] = useState<string>();
   const selected = model.drivers.find((d) => d.id === selectedId);
@@ -280,6 +325,7 @@ function LiveTrack({ model, events, sessions }: { model: TrackModel; events: Liv
           </Link>
         )}
       </div>
+      <FlagBanners flags={flags} drivers={model.drivers} />
       {selected && <DriverPanel driver={selected} events={events} teamId={team.id} onClose={() => setSelectedId(undefined)} />}
       <div className="md:hidden">
         <SessionsPanel sessions={sessions.filter((s) => s.status !== 'ended')} title="On track" />
@@ -305,10 +351,12 @@ export function PitWallPage() {
   const demo = params.get('demo') === '1';
   const sessions = useSessions(team.id, { poll: live !== 'live' });
   const events = useTeamEvents(team.id);
+  const flags = useFlags(team.id, { poll: live !== 'live' });
   const now = useNow();
+  const flying = useMemo(() => activeFlags(flags.data ?? [], now), [flags.data, now]);
   const model = useMemo(
-    () => buildTrackModel(sessions.data ?? [], events.data ?? [], now),
-    [sessions.data, events.data, now],
+    () => buildTrackModel(sessions.data ?? [], events.data ?? [], now, flying),
+    [sessions.data, events.data, now, flying],
   );
   const onTrack = model.drivers.length > 0;
 
@@ -336,7 +384,7 @@ export function PitWallPage() {
             <DemoRace onExit={() => setParams({})} />
           </>
         ) : onTrack ? (
-          <LiveTrack model={model} events={events.data ?? []} sessions={sessions.data ?? []} />
+          <LiveTrack model={model} events={events.data ?? []} sessions={sessions.data ?? []} flags={flying} />
         ) : (
           <EmptyTrack sessions={sessions.data ?? []} onDemo={() => setParams({ demo: '1' })} />
         )}

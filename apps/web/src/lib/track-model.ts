@@ -1,4 +1,4 @@
-import type { AgentSession, LiveEvent } from '@race-control/shared';
+import type { AgentSession, LiveEvent, YellowFlag } from '@race-control/shared';
 import type { FlagStatus } from '@/components/status-flag';
 import type { Driver, Sector } from '@/components/timing-tower';
 
@@ -9,8 +9,6 @@ import type { Driver, Sector } from '@/components/timing-tower';
 export const ON_TRACK_MS = 2 * 60 * 60 * 1000;
 /** Idle sessions (the agent finished responding) leave sooner, so old sessions don't crowd the tower. */
 export const IDLE_ON_TRACK_MS = 10 * 60 * 1000;
-/** Two agents on the same file within this window share a yellow flag. */
-export const COLLISION_MS = 30 * 60 * 1000;
 const MAX_CLUSTERS = 8;
 const MAX_FILES_PER_CLUSTER = 10;
 const FILE_TOOLS = new Set(['Edit', 'MultiEdit', 'Write', 'Read', 'NotebookEdit']);
@@ -54,7 +52,13 @@ function statusFor(session: AgentSession, latest: LiveEvent | undefined): FlagSt
   return session.status === 'active' ? 'working' : 'idle';
 }
 
-export function buildTrackModel(sessions: AgentSession[], events: LiveEvent[], now = Date.now()): TrackModel {
+/** `flags` are the server's current yellow flags (already filtered to the active ones). */
+export function buildTrackModel(
+  sessions: AgentSession[],
+  events: LiveEvent[],
+  now = Date.now(),
+  flags: YellowFlag[] = [],
+): TrackModel {
   // Every working session is on track. A person's idle sessions collapse into their latest one,
   // shown only while they have nothing working, so finished sessions don't crowd the tower.
   const working = sessions.filter((s) => s.status === 'active' && now - at(s.lastEventAt) < ON_TRACK_MS);
@@ -128,14 +132,10 @@ export function buildTrackModel(sessions: AgentSession[], events: LiveEvent[], n
     };
   });
 
-  // Yellow flag: two working agents whose latest file is the same, both recently.
+  // Yellow flag: the server saw this session edit a file another session edited recently.
+  const flagged = new Set(flags.flatMap((f) => f.drivers.map((d) => d.sessionId)));
   for (const driver of drivers) {
-    if (driver.status !== 'working' || !driver.fileId) continue;
-    const touched = files.get(driver.fileId)!;
-    const shared = drivers.some(
-      (other) => other !== driver && other.fileId === driver.fileId && other.status !== 'idle' && now - touched.lastAt < COLLISION_MS,
-    );
-    if (shared) driver.status = 'yellow';
+    if (driver.status === 'working' && flagged.has(driver.sessionId)) driver.status = 'yellow';
   }
 
   return { clusters: keptClusters, files: keptFiles, drivers };

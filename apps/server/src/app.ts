@@ -8,6 +8,7 @@ import { registerErrorHandler } from './lib/errors.ts';
 import { TeamBus } from './lib/team-bus.ts';
 import type { Mailer } from './lib/mailer.ts';
 import { authRoutes } from './modules/auth/routes.ts';
+import { flagRoutes } from './modules/flags/routes.ts';
 import { hookRoutes } from './modules/hooks/routes.ts';
 import { liveRoutes } from './modules/sessions/live.ts';
 import { sessionRoutes } from './modules/sessions/routes.ts';
@@ -68,6 +69,7 @@ export async function buildApp({
   tokenRoutes(app, deps);
   hookRoutes(app, deps);
   sessionRoutes(app, deps);
+  flagRoutes(app, deps);
   liveRoutes(app, deps);
 
   return app;

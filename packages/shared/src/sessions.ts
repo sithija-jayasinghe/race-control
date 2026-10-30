@@ -40,11 +40,38 @@ export const liveEventSchema = z.object({
 });
 export type LiveEvent = z.infer<typeof liveEventSchema>;
 
+/** Edit tools: two people editing the same file is a yellow flag. Reads never are. */
+export const EDIT_TOOLS = ['Edit', 'MultiEdit', 'Write', 'NotebookEdit'] as const;
+
+/** A person in a yellow flag: their latest session on the file, and when it last edited it. */
+export const flagDriverSchema = z.object({
+  sessionId: z.uuid(),
+  userId: z.uuid(),
+  userEmail: z.string(),
+  userName: z.string().nullable(),
+  agent: agentSchema,
+  lastAt: z.iso.datetime(),
+});
+
+/** Two or more people on a team edited the same file in the same repo recently. */
+export const yellowFlagSchema = z.object({
+  /** Stable per file: `repo:path`. */
+  id: z.string(),
+  repoName: z.string(),
+  target: z.string(),
+  /** Most recent edit first. */
+  drivers: z.array(flagDriverSchema).min(2),
+  /** When the flag clears unless someone edits the file again. */
+  expiresAt: z.iso.datetime(),
+});
+export type YellowFlag = z.infer<typeof yellowFlagSchema>;
+
 /** Messages on a team's live channel (`/teams/:teamId/live`). */
 export const liveMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('hello'), teamId: z.uuid() }),
   z.object({ type: z.literal('session'), session: agentSessionSchema }),
   z.object({ type: z.literal('event'), event: liveEventSchema }),
+  z.object({ type: z.literal('flag'), flag: yellowFlagSchema }),
 ]);
 export type LiveMessage = z.infer<typeof liveMessageSchema>;
 
