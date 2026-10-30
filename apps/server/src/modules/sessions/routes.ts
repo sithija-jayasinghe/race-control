@@ -3,6 +3,8 @@ import {
   errorResponseSchema,
   hookSetupSchema,
   liveEventSchema,
+  sessionParamsSchema,
+  sessionTimelineSchema,
   teamParamsSchema,
 } from '@race-control/shared';
 import type { FastifyInstance } from 'fastify';
@@ -15,6 +17,7 @@ import * as repo from './repo.ts';
 
 const LIST_LIMIT = 50;
 const EVENTS_LIMIT = 200;
+const TIMELINE_LIMIT = 1000;
 
 export function sessionRoutes(app: FastifyInstance, deps: AppDeps) {
   const r = app.withTypeProvider<ZodTypeProvider>();
@@ -44,6 +47,24 @@ export function sessionRoutes(app: FastifyInstance, deps: AppDeps) {
       },
     },
     async (request) => repo.listRecentEvents(deps.db, getTeamAuth(request).teamId, EVENTS_LIMIT),
+  );
+
+  r.get(
+    '/teams/:teamId/sessions/:sessionId',
+    {
+      preHandler: teamAccess(deps),
+      schema: {
+        params: sessionParamsSchema,
+        response: { 200: sessionTimelineSchema, 401: errorResponseSchema, 404: errorResponseSchema },
+      },
+    },
+    async (request, reply) => {
+      const { teamId } = getTeamAuth(request);
+      const session = await repo.findSessionView(deps.db, teamId, request.params.sessionId);
+      if (!session) return reply.code(404).send({ error: 'not_found' });
+      const { events, truncated } = await repo.listSessionEvents(deps.db, teamId, session.id, TIMELINE_LIMIT);
+      return { session: repo.serializeSession(session), events, truncated };
+    },
   );
 
   // Where agents send hooks, for the settings snippet in the dashboard.

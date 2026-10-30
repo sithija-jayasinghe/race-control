@@ -205,7 +205,17 @@ function SessionsPanel({ sessions, title }: { sessions: AgentSession[]; title: s
 }
 
 /** The selected driver's details and live command stream. */
-function DriverPanel({ driver, events, onClose }: { driver: TrackDriver; events: LiveEvent[]; onClose: () => void }) {
+function DriverPanel({
+  driver,
+  events,
+  teamId,
+  onClose,
+}: {
+  driver: TrackDriver;
+  events: LiveEvent[];
+  teamId: string;
+  onClose: () => void;
+}) {
   const stream = events.filter((e) => e.sessionId === driver.sessionId && e.type !== 'PostToolUse').slice(-24);
   return (
     <aside
@@ -229,6 +239,9 @@ function DriverPanel({ driver, events, onClose }: { driver: TrackDriver; events:
         <StatusFlag status={driver.status} />
         {driver.lastAction && <p className="mt-1.5 truncate font-mono text-xs">{driver.lastAction}</p>}
       </div>
+      <Link to={`/t/${teamId}/sessions/${driver.sessionId}`} className="text-sm text-muted-foreground hover:text-foreground">
+        Open full timeline →
+      </Link>
       <ol aria-label="Live commands" className="min-h-0 flex-1 overflow-y-auto font-mono text-xs leading-relaxed text-muted-foreground">
         {stream.length === 0 && <li>Waiting for the next action…</li>}
         {stream.map((e) => (
@@ -267,7 +280,7 @@ function LiveTrack({ model, events, sessions }: { model: TrackModel; events: Liv
           </Link>
         )}
       </div>
-      {selected && <DriverPanel driver={selected} events={events} onClose={() => setSelectedId(undefined)} />}
+      {selected && <DriverPanel driver={selected} events={events} teamId={team.id} onClose={() => setSelectedId(undefined)} />}
       <div className="md:hidden">
         <SessionsPanel sessions={sessions.filter((s) => s.status !== 'ended')} title="On track" />
       </div>

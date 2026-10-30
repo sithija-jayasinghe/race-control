@@ -72,7 +72,7 @@ Desktop                                              Phone
 
 - **Desktop:** a thin floating icon rail with tooltips; a top bar with the wordmark, team, counters, LIVE clock and theme menu.
 - **Phone:** the same top bar without counters; a floating glass tab bar with icons; the tower goes full width above the scene.
-- Navigation items for later weeks (Sessions, Approvals, Rules) appear only once they're built. Everything team-specific lives under `/t/:teamId/...`.
+- Navigation: Pit wall, Sessions, Team, Settings. Items for later weeks (Approvals, Rules) appear only once they're built. Everything team-specific lives under `/t/:teamId/...`.
 - Every screen works from 360 px wide, with no horizontal scrolling and tap targets of at least 44 px.
 
 ## Building blocks
@@ -107,7 +107,7 @@ Desktop                                              Phone
 | Pit wall (Week 1: empty track, connect checklist, and a demo race at `?demo=1`) | `/t/:teamId` | 1, live map in Week 3 |
 | Team: members and invite links | `/t/:teamId/team` | 1 |
 | Settings: your tokens, theme | `/t/:teamId/settings` | 1 |
-| Session timeline | `/t/:teamId/sessions/:id` | 3 |
+| Sessions (filter by status) and session timeline | `/t/:teamId/sessions`, `/t/:teamId/sessions/:id` | 3 |
 | Rules | `/t/:teamId/rules` | 4 |
 | Approvals queue and approval card | `/t/:teamId/approvals`, `/t/:teamId/approvals/:id` | 4 |
 

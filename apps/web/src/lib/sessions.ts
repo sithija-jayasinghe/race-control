@@ -1,4 +1,4 @@
-import { agentSessionSchema, hookSetupSchema, liveEventSchema } from '@race-control/shared';
+import { agentSessionSchema, hookSetupSchema, liveEventSchema, sessionTimelineSchema } from '@race-control/shared';
 import { useQuery } from '@tanstack/react-query';
 import { z } from 'zod';
 import { api } from '@/lib/api';
@@ -32,5 +32,14 @@ export function useTeamEvents(teamId: string) {
     queryKey: ['teams', teamId, 'events'],
     queryFn: () => api(`/teams/${teamId}/events`, { schema: z.array(liveEventSchema) }),
     staleTime: Infinity,
+  });
+}
+
+/** One session and its steps. New steps arrive through the live channel (see the timeline page). */
+export function useSessionTimeline(teamId: string, sessionId: string) {
+  return useQuery({
+    queryKey: ['teams', teamId, 'sessions', sessionId],
+    queryFn: () => api(`/teams/${teamId}/sessions/${sessionId}`, { schema: sessionTimelineSchema }),
+    retry: false,
   });
 }

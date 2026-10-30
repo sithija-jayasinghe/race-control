@@ -75,3 +75,42 @@ export async function listRecentEvents(db: DbOrTx, teamId: string, limit: number
     .limit(limit);
   return rows.reverse().map((e) => ({ ...e, createdAt: e.createdAt.toISOString() }));
 }
+
+/** The detail shown on a timeline step, picked from the stored (already redacted) payload. */
+function detailFrom(type: string, payload: unknown): string | null {
+  const p = (payload ?? {}) as Record<string, unknown>;
+  const pick = (key: string) => {
+    const value = p[key];
+    return typeof value === 'string' ? value : null;
+  };
+  if (type === 'PostToolUseFailure') return pick('error');
+  if (type === 'SessionEnd') return pick('reason');
+  if (type === 'SessionStart') return [pick('source'), pick('model')].filter(Boolean).join(' · ') || null;
+  return null;
+}
+
+/** One session's events, oldest first: the latest `limit`, and whether older ones were left out. */
+export async function listSessionEvents(db: DbOrTx, teamId: string, sessionId: string, limit: number) {
+  const rows = await db
+    .select({
+      id: events.id,
+      sessionId: events.sessionId,
+      type: events.type,
+      toolName: events.toolName,
+      target: events.target,
+      summary: events.summary,
+      decision: events.decision,
+      createdAt: events.createdAt,
+      payload: events.payloadRedacted,
+    })
+    .from(events)
+    .where(and(eq(events.teamId, teamId), eq(events.sessionId, sessionId)))
+    .orderBy(desc(events.createdAt))
+    .limit(limit + 1);
+  const truncated = rows.length > limit;
+  const kept = rows.slice(0, limit).reverse();
+  return {
+    truncated,
+    events: kept.map(({ payload, ...e }) => ({ ...e, createdAt: e.createdAt.toISOString(), detail: detailFrom(e.type, payload) })),
+  };
+}

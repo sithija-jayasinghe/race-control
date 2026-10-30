@@ -47,3 +47,17 @@ export const liveMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('event'), event: liveEventSchema }),
 ]);
 export type LiveMessage = z.infer<typeof liveMessageSchema>;
+
+/** A timeline step: an event plus one short, already-redacted detail (an error's first line, a session's end reason). */
+export const timelineEventSchema = liveEventSchema.extend({ detail: z.string().nullable() });
+export type TimelineEvent = z.infer<typeof timelineEventSchema>;
+
+export const sessionParamsSchema = z.object({ teamId: z.uuid(), sessionId: z.uuid() });
+
+export const sessionTimelineSchema = z.object({
+  session: agentSessionSchema,
+  events: z.array(timelineEventSchema),
+  /** True when the session has more events than were returned (only the latest are sent). */
+  truncated: z.boolean(),
+});
+export type SessionTimeline = z.infer<typeof sessionTimelineSchema>;

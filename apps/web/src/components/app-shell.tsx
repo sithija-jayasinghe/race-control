@@ -1,5 +1,5 @@
 import type { MyTeam } from '@race-control/shared';
-import { Check, ChevronDown, Gauge, Plus, Settings2, Users, type LucideIcon } from 'lucide-react';
+import { Check, ChevronDown, Gauge, History, Plus, Settings2, Users, type LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router';
 import { FLAGS, type FlagStatus } from '@/components/status-flag';
@@ -15,11 +15,12 @@ import {
 import { Wordmark } from '@/components/wordmark';
 import { cn } from '@/lib/utils';
 
-export type NavKey = 'pit-wall' | 'team' | 'settings';
+export type NavKey = 'pit-wall' | 'sessions' | 'team' | 'settings';
 
-// Sessions, Approvals and Rules join this list in the weeks they're built (docs/design/UI.md).
+// Approvals and Rules join this list in Week 4 (docs/design/UI.md).
 const navItems: Array<{ key: NavKey; label: string; icon: LucideIcon; path: string }> = [
   { key: 'pit-wall', label: 'Pit wall', icon: Gauge, path: '' },
+  { key: 'sessions', label: 'Sessions', icon: History, path: '/sessions' },
   { key: 'team', label: 'Team', icon: Users, path: '/team' },
   { key: 'settings', label: 'Settings', icon: Settings2, path: '/settings' },
 ];
@@ -135,7 +136,7 @@ export function AppShell({ team, teams, active, counts, actions, userEmail, scen
 
       <nav
         aria-label="Main"
-        className="glass fixed inset-x-3 bottom-3 z-20 grid grid-cols-3 rounded-2xl pb-[env(safe-area-inset-bottom)] md:hidden"
+        className="glass fixed inset-x-3 bottom-3 z-20 grid grid-cols-4 rounded-2xl pb-[env(safe-area-inset-bottom)] md:hidden"
       >
         {navItems.map(({ key, label, icon: Icon, path }) => (
           <Link
