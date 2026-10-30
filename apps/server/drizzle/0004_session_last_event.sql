@@ -1,0 +1,2 @@
+ALTER TABLE "sessions" ADD COLUMN "last_event_at" timestamp with time zone DEFAULT now() NOT NULL;--> statement-breakpoint
+CREATE INDEX "sessions_team_last_event_idx" ON "sessions" USING btree ("team_id","last_event_at" DESC NULLS LAST);

@@ -1,4 +1,4 @@
-import type { DevToken, Invite, Member, MeResponse, MyTeam, Role } from '@race-control/shared';
+import type { AgentSession, DevToken, Invite, Member, MeResponse, MyTeam, Role } from '@race-control/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render } from '@testing-library/react';
 import { StrictMode } from 'react';
@@ -43,6 +43,7 @@ export function fakeServer(options: { signedIn?: boolean; teams?: MeResponse['te
     ),
     invites: new Map<string, Invite[]>(),
     tokens: new Map<string, DevToken[]>(),
+    sessions: new Map<string, AgentSession[]>(),
   };
   const calls: Array<{ method: string; path: string; body: unknown }> = [];
   const members = (teamId: string) => state.members.get(teamId) ?? [];
@@ -130,6 +131,8 @@ export function fakeServer(options: { signedIn?: boolean; teams?: MeResponse['te
         return ok();
       },
     ],
+    ['GET', /^\/teams\/([^/]+)\/sessions$/, (_, [teamId]) => ok(state.sessions.get(teamId!) ?? [])],
+    ['GET', /^\/setup\/hooks$/, () => ok({ hooksUrl: 'http://api.test/hooks' })],
     ['GET', /^\/teams\/([^/]+)\/tokens$/, (_, [teamId]) => ok(state.tokens.get(teamId!) ?? [])],
     [
       'POST',
@@ -227,4 +230,22 @@ export function renderApp(path: string) {
     </StrictMode>,
   );
   return { ...view, router };
+}
+
+/** An agent session as the server lists it. */
+export function agentSession(overrides: Partial<AgentSession> = {}): AgentSession {
+  return {
+    id: newId(),
+    userId: USER.id,
+    userEmail: USER.email,
+    userName: null,
+    agent: 'claude_code',
+    repoName: 'buildflow-api',
+    status: 'active',
+    startedAt: new Date().toISOString(),
+    lastEventAt: new Date().toISOString(),
+    endedAt: null,
+    lastAction: 'edit src/app.ts',
+    ...overrides,
+  };
 }

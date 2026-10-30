@@ -11,6 +11,7 @@ describe('loadEnv', () => {
       PORT: 4000,
       HOST: '127.0.0.1',
       WEB_URL: 'http://localhost:5173',
+      PUBLIC_URL: 'http://localhost:4000',
     });
   });
 

@@ -1,7 +1,9 @@
 import { createDevTokenRequestSchema, type DevToken } from '@race-control/shared';
 import { Monitor, Moon, Sun } from 'lucide-react';
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
+import { useLocation } from 'react-router';
 import { AppShell } from '@/components/app-shell';
+import { ConnectPanel } from '@/components/connect-panel';
 import { CopyButton } from '@/components/copy-button';
 import { Panel } from '@/components/panel';
 import { ApiError } from '@/lib/api';
@@ -191,12 +193,22 @@ function AppearancePanel() {
 
 export function SettingsPage() {
   const { me, team } = useTeamContext();
+  const location = useLocation();
+
+  // React Router doesn't scroll to #anchors; the Pit wall links to #connect.
+  useEffect(() => {
+    if (location.hash === '#connect') document.getElementById('connect')?.scrollIntoView({ behavior: 'smooth' });
+  }, [location.hash]);
+
   return (
     <AppShell team={team} teams={me.teams} active="settings" userEmail={me.user.email}>
       <div className="mx-auto max-w-4xl space-y-4">
         <h1 className="broadcast text-2xl">Settings</h1>
         <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_280px] md:items-start">
-          <TokensPanel teamId={team.id} myUserId={me.user.id} isLead={team.role === 'lead'} />
+          <div className="min-w-0 space-y-4">
+            <TokensPanel teamId={team.id} myUserId={me.user.id} isLead={team.role === 'lead'} />
+            <ConnectPanel teamId={team.id} myUserId={me.user.id} />
+          </div>
           <AppearancePanel />
         </div>
       </div>

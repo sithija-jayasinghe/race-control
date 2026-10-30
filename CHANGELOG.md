@@ -32,6 +32,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Team page: members and roles; leads can change roles, remove members (with a confirm step) and create, copy and revoke invite links. Anyone can leave a team, and the last lead is told why they can't step down.
 - Settings page: create agent tokens (shown once, with copy buttons for the token and the `export RACE_CONTROL_TOKEN=…` line), see when each was last used, and revoke them. Leads see everyone's tokens. Theme choice.
 - The Pit wall now starts as an empty track ("No cars on track") with the steps to connect an agent, and a "Watch a demo race" mode with sample drivers.
+- Hook endpoint `POST /hooks/:event` for Claude Code's HTTP hooks: authenticated with your agent token, rate-limited per token, and always answers quickly with "no decision" so agents carry on. Records sessions (active, idle, ended) and every tool call.
+- Secret redaction before anything is stored: only the command, file path or URL of each tool call is kept (never file contents, prompts, replies or tool output), and API keys, tokens, passwords and private keys are replaced with `[REDACTED]`.
+- Connect Claude Code: Settings shows the `.claude/settings.json` hooks for your server, for one project or all of yours, with a copy button. The token is read from `RACE_CONTROL_TOKEN`, so the file can be committed for the whole team.
+- The Pit wall lists the team's sessions as they report in (status, who, repo, last action), counts the cars on track, and hides the setup steps once your own agent is connected.
+- Session simulator: `pnpm simulate` replays a scripted race of five demo drivers (a shared-file collision, a migration, a failing test, a `.env` edit, a secret in a command) through the real hook endpoint in a "Demo team". `--viewer` adds you to watch, `--loop` and `--speed` control the race, `--reset` removes the demo data. Refuses to run in production.
 
 ### Removed
 - `SESSION_SECRET` from `.env.example`. Login sessions are looked up by hash, so nothing needs signing.

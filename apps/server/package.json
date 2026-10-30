@@ -9,7 +9,8 @@
     "typecheck": "tsc -p tsconfig.json",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "simulate": "node --env-file-if-exists=../../.env scripts/simulate.ts"
   },
   "dependencies": {
     "@fastify/cookie": "^11.1.5",

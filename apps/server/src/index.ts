@@ -14,6 +14,7 @@ const app = await buildApp({
   db,
   mailer: createConsoleMailer(),
   webUrl: env.WEB_URL,
+  publicUrl: env.PUBLIC_URL,
   cookieSecure: false,
 });
 app.addHook('onClose', close);

@@ -7,6 +7,8 @@ const envSchema = z.object({
   DATABASE_URL: z.string().min(1),
   // Where the dashboard runs. Magic links point here.
   WEB_URL: z.url().default('http://localhost:5173'),
+  // Where agents reach this server. The hook settings developers copy point here.
+  PUBLIC_URL: z.url().default('http://localhost:4000'),
 });
 
 export type Env = z.infer<typeof envSchema>;
