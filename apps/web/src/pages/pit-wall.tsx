@@ -1,6 +1,6 @@
-import type { AgentSession } from '@race-control/shared';
+import type { AgentSession, LiveEvent } from '@race-control/shared';
 import { Check, Lock } from 'lucide-react';
-import { useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { AppShell } from '@/components/app-shell';
 import { LightsOut } from '@/components/lights-out';
@@ -11,7 +11,9 @@ import { RaceControlBanner } from '@/components/race-control-banner';
 import { StatusFlag, type FlagStatus } from '@/components/status-flag';
 import { TeamRadioCard } from '@/components/team-radio-card';
 import { TimingTower, type Driver } from '@/components/timing-tower';
-import { useSessions } from '@/lib/sessions';
+import { TrackMap } from '@/components/track-map';
+import { useSessions, useTeamEvents } from '@/lib/sessions';
+import { buildTrackModel, type TrackDriver, type TrackModel } from '@/lib/track-model';
 import { timeAgo } from '@/lib/time';
 import { useTokens } from '@/lib/tokens';
 import { cn } from '@/lib/utils';
@@ -125,68 +127,26 @@ function SessionRow({ session }: { session: AgentSession }) {
   );
 }
 
-/**
- * The Pit wall until the live map arrives (Week 3): an empty track with the steps to connect,
- * then the team's sessions as soon as agents report in.
- */
-function Track({ onDemo }: { onDemo: () => void }) {
-  const { me, team, live } = useTeamContext();
+/** Before any agent is on track: the steps to connect, and the team's past sessions. */
+function EmptyTrack({ sessions, onDemo }: { sessions: AgentSession[]; onDemo: () => void }) {
+  const { me, team } = useTeamContext();
   const tokens = useTokens(team.id);
-  const sessions = useSessions(team.id, { poll: live !== 'live' });
   const hasToken = (tokens.data ?? []).some((t) => t.userId === me.user.id);
-  const connected = (sessions.data ?? []).some((s) => s.userId === me.user.id);
-  const active = (sessions.data ?? []).filter((s) => s.status === 'active').length;
-  const hasSessions = (sessions.data ?? []).length > 0;
+  const connected = sessions.some((s) => s.userId === me.user.id);
 
   return (
     <div className="mx-auto flex min-h-[calc(100dvh-10rem)] max-w-xl flex-col justify-center gap-6 py-6">
       <div className="space-y-2 text-center">
         <p className="broadcast text-sm text-f1">Pit wall</p>
-        <h1 className="broadcast text-4xl sm:text-5xl">
-          {active > 0 ? `${active} ${active === 1 ? 'car' : 'cars'} on track` : 'No cars on track'}
-        </h1>
+        <h1 className="broadcast text-4xl sm:text-5xl">No cars on track</h1>
         <p className="text-muted-foreground">
-          {hasSessions ? 'Every session, as it reports in.' : 'Connect an agent and it shows up here, live.'}
+          {sessions.length > 0 ? 'Agents appear here the moment they start working.' : 'Connect an agent and it shows up here, live.'}
         </p>
       </div>
 
-      {!connected && (
-        <ol aria-label="Connect your agent" className="glass overflow-hidden rounded-xl">
-          <Step number={1} done={hasToken} title="Create an agent token">
-            {hasToken ? (
-              'Done. Make one for each machine you use.'
-            ) : (
-              <>
-                One per machine, in{' '}
-                <Link to={`/t/${team.id}/settings`} className="text-foreground underline underline-offset-2">
-                  Settings
-                </Link>
-                .
-              </>
-            )}
-          </Step>
-          <Step number={2} title="Add Race Control's hooks to Claude Code">
-            Copy the settings from{' '}
-            <Link to={`/t/${team.id}/settings#connect`} className="text-foreground underline underline-offset-2">
-              Connect Claude Code
-            </Link>{' '}
-            into your project.
-          </Step>
-          <Step number={3} title="Start a coding session">
-            Your agent appears here within seconds of its first action.
-          </Step>
-        </ol>
-      )}
+      {!connected && <ConnectSteps hasToken={hasToken} teamId={team.id} />}
 
-      {hasSessions && (
-        <Panel title="Sessions" aside={<span className="font-mono text-[11px] text-muted-foreground">{sessions.data!.length}</span>}>
-          <ul aria-label="Sessions">
-            {sessions.data!.map((session) => (
-              <SessionRow key={session.id} session={session} />
-            ))}
-          </ul>
-        </Panel>
-      )}
+      {sessions.length > 0 && <SessionsPanel sessions={sessions} title="Recent sessions" />}
 
       <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm">
         <button type="button" onClick={onDemo} className="text-foreground underline underline-offset-4">
@@ -202,10 +162,142 @@ function Track({ onDemo }: { onDemo: () => void }) {
   );
 }
 
+function ConnectSteps({ hasToken, teamId }: { hasToken: boolean; teamId: string }) {
+  return (
+    <ol aria-label="Connect your agent" className="glass overflow-hidden rounded-xl">
+      <Step number={1} done={hasToken} title="Create an agent token">
+        {hasToken ? (
+          'Done. Make one for each machine you use.'
+        ) : (
+          <>
+            One per machine, in{' '}
+            <Link to={`/t/${teamId}/settings`} className="text-foreground underline underline-offset-2">
+              Settings
+            </Link>
+            .
+          </>
+        )}
+      </Step>
+      <Step number={2} title="Add Race Control's hooks to Claude Code">
+        Copy the settings from{' '}
+        <Link to={`/t/${teamId}/settings#connect`} className="text-foreground underline underline-offset-2">
+          Connect Claude Code
+        </Link>{' '}
+        into your project.
+      </Step>
+      <Step number={3} title="Start a coding session">
+        Your agent appears here within seconds of its first action.
+      </Step>
+    </ol>
+  );
+}
+
+function SessionsPanel({ sessions, title }: { sessions: AgentSession[]; title: string }) {
+  return (
+    <Panel title={title} aside={<span className="font-mono text-[11px] text-muted-foreground">{sessions.length}</span>}>
+      <ul aria-label="Sessions">
+        {sessions.map((session) => (
+          <SessionRow key={session.id} session={session} />
+        ))}
+      </ul>
+    </Panel>
+  );
+}
+
+/** The selected driver's details and live command stream. */
+function DriverPanel({ driver, events, onClose }: { driver: TrackDriver; events: LiveEvent[]; onClose: () => void }) {
+  const stream = events.filter((e) => e.sessionId === driver.sessionId && e.type !== 'PostToolUse').slice(-24);
+  return (
+    <aside
+      aria-label={`${driver.name}'s agent`}
+      className="glass flex max-h-[calc(100dvh-7rem)] w-full flex-col gap-3 rounded-2xl p-4 md:w-[340px]"
+    >
+      <div className="flex items-center gap-3">
+        <span className="broadcast grid size-10 place-items-center rounded-full bg-white/[0.06] text-sm tracking-normal">{driver.code}</span>
+        <div className="min-w-0 flex-1">
+          <h2 className="truncate text-base font-medium">{driver.name}</h2>
+          <p className="truncate font-mono text-xs text-muted-foreground">
+            {driver.agent === 'codex' ? 'Codex' : 'Claude Code'}
+            {driver.repo && ` · ${driver.repo}`}
+          </p>
+        </div>
+        <button type="button" onClick={onClose} aria-label="Close" className="rounded-lg px-2 py-1 text-muted-foreground hover:text-foreground">
+          ×
+        </button>
+      </div>
+      <div className="rounded-xl border border-glass-line bg-white/[0.03] p-3 text-sm">
+        <StatusFlag status={driver.status} />
+        {driver.lastAction && <p className="mt-1.5 truncate font-mono text-xs">{driver.lastAction}</p>}
+      </div>
+      <ol aria-label="Live commands" className="min-h-0 flex-1 overflow-y-auto font-mono text-xs leading-relaxed text-muted-foreground">
+        {stream.length === 0 && <li>Waiting for the next action…</li>}
+        {stream.map((e) => (
+          <li key={e.id} className={cn('truncate', e.type === 'PostToolUseFailure' && 'text-flag-red')}>
+            <span className="mr-2 text-muted-foreground/60">{new Date(e.createdAt).toLocaleTimeString([], { hour12: false })}</span>
+            {e.summary}
+          </li>
+        ))}
+      </ol>
+    </aside>
+  );
+}
+
+/** Agents on track: the live map behind, the timing tower and the selected driver in front. */
+function LiveTrack({ model, events, sessions }: { model: TrackModel; events: LiveEvent[]; sessions: AgentSession[] }) {
+  const { me, team } = useTeamContext();
+  const [selectedId, setSelectedId] = useState<string>();
+  const selected = model.drivers.find((d) => d.id === selectedId);
+  const connected = sessions.some((s) => s.userId === me.user.id);
+
+  return (
+    <div data-track-pass-through="" className="flex min-h-[calc(100dvh-7rem)] flex-col gap-4 md:flex-row md:items-start md:justify-between">
+      <h1 className="sr-only">Pit wall</h1>
+      <div className="w-full shrink-0 space-y-2 md:w-[268px]">
+        <TimingTower
+          drivers={model.drivers}
+          selectedId={selectedId}
+          onSelect={(d) => setSelectedId((id) => (id === d.id ? undefined : d.id))}
+        />
+        {!connected && (
+          <Link
+            to={`/t/${team.id}/settings#connect`}
+            className="glass block rounded-xl px-3 py-2 text-sm text-muted-foreground hover:text-foreground"
+          >
+            Connect your own agent →
+          </Link>
+        )}
+      </div>
+      {selected && <DriverPanel driver={selected} events={events} onClose={() => setSelectedId(undefined)} />}
+      <div className="md:hidden">
+        <SessionsPanel sessions={sessions.filter((s) => s.status !== 'ended')} title="On track" />
+      </div>
+      <TrackMap model={model} selectedId={selectedId} onSelect={setSelectedId} />
+    </div>
+  );
+}
+
+/** Re-renders every 15 s, so drivers who've gone quiet leave the track without a new event. */
+function useNow(intervalMs = 15_000) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), intervalMs);
+    return () => clearInterval(id);
+  }, [intervalMs]);
+  return now;
+}
+
 export function PitWallPage() {
   const { me, team, live } = useTeamContext();
   const [params, setParams] = useSearchParams();
   const demo = params.get('demo') === '1';
+  const sessions = useSessions(team.id, { poll: live !== 'live' });
+  const events = useTeamEvents(team.id);
+  const now = useNow();
+  const model = useMemo(
+    () => buildTrackModel(sessions.data ?? [], events.data ?? [], now),
+    [sessions.data, events.data, now],
+  );
+  const onTrack = model.drivers.length > 0;
 
   return (
     <>
@@ -215,7 +307,8 @@ export function PitWallPage() {
         teams={me.teams}
         active="pit-wall"
         userEmail={me.user.email}
-        counts={demo ? countByStatus(DEMO_DRIVERS) : undefined}
+        counts={demo ? countByStatus(DEMO_DRIVERS) : onTrack ? countByStatus(model.drivers) : undefined}
+        scene={onTrack && !demo ? null : undefined}
         actions={
           demo ? (
             <LiveClock since={DEMO_START} className="hidden sm:inline-flex" />
@@ -229,8 +322,10 @@ export function PitWallPage() {
             <h1 className="sr-only">Pit wall demo</h1>
             <DemoRace onExit={() => setParams({})} />
           </>
+        ) : onTrack ? (
+          <LiveTrack model={model} events={events.data ?? []} sessions={sessions.data ?? []} />
         ) : (
-          <Track onDemo={() => setParams({ demo: '1' })} />
+          <EmptyTrack sessions={sessions.data ?? []} onDemo={() => setParams({ demo: '1' })} />
         )}
       </AppShell>
     </>

@@ -1,4 +1,4 @@
-import { agentSessionSchema, hookSetupSchema } from '@race-control/shared';
+import { agentSessionSchema, hookSetupSchema, liveEventSchema } from '@race-control/shared';
 import { useQuery } from '@tanstack/react-query';
 import { z } from 'zod';
 import { api } from '@/lib/api';
@@ -22,6 +22,15 @@ export function useHookSetup() {
   return useQuery({
     queryKey: ['setup', 'hooks'],
     queryFn: () => api('/setup/hooks', { schema: hookSetupSchema }),
+    staleTime: Infinity,
+  });
+}
+
+/** The team's recent events (oldest first). The live channel appends new ones to the same cache. */
+export function useTeamEvents(teamId: string) {
+  return useQuery({
+    queryKey: ['teams', teamId, 'events'],
+    queryFn: () => api(`/teams/${teamId}/events`, { schema: z.array(liveEventSchema) }),
     staleTime: Infinity,
   });
 }

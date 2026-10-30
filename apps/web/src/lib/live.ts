@@ -6,6 +6,7 @@ import { sessionsKey } from '@/lib/sessions';
 export type LiveStatus = 'connecting' | 'live' | 'offline';
 
 export const eventsKey = (teamId: string) => ['teams', teamId, 'events'] as const;
+// useTeamEvents (lib/sessions.ts) uses the same key, so live events land in the same list.
 
 const MAX_SESSIONS = 50;
 const MAX_EVENTS = 200;

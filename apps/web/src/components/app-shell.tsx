@@ -38,6 +38,8 @@ type AppShellProps = {
   actions?: ReactNode;
   /** The signed-in person's email, for the account menu. */
   userEmail: string;
+  /** What's drawn behind the page. Defaults to the track scene; `null` when the page draws its own (the live map). */
+  scene?: ReactNode;
   children: ReactNode;
 };
 
@@ -73,12 +75,12 @@ function TeamSwitcher({ team, teams }: { team: MyTeam; teams: MyTeam[] }) {
 }
 
 /** Floating glass chrome over the track scene: icon rail and top bar on desktop, top bar and tab bar on phones. */
-export function AppShell({ team, teams, active, counts, actions, userEmail, children }: AppShellProps) {
+export function AppShell({ team, teams, active, counts, actions, userEmail, scene, children }: AppShellProps) {
   const to = (path: string) => `/t/${team.id}${path}`;
 
   return (
-    <div className="relative min-h-dvh">
-      <TrackScene />
+    <div className="relative isolate min-h-dvh">
+      {scene === undefined ? <TrackScene /> : scene}
 
       <nav aria-label="Main" className="glass fixed top-4 bottom-4 left-4 z-20 hidden w-[52px] flex-col items-center gap-1.5 rounded-2xl py-2.5 md:flex">
         {navItems.map(({ key, label, icon: Icon, path }) => (
@@ -127,7 +129,9 @@ export function AppShell({ team, teams, active, counts, actions, userEmail, chil
         </div>
       </header>
 
-      <main className="relative z-10 px-4 pt-20 pb-24 md:pt-[72px] md:pr-4 md:pb-6 md:pl-[84px]">{children}</main>
+      <main data-track-pass-through="" className="relative z-10 px-4 pt-20 pb-24 md:pt-[72px] md:pr-4 md:pb-6 md:pl-[84px]">
+        {children}
+      </main>
 
       <nav
         aria-label="Main"

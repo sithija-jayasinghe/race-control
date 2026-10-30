@@ -1,7 +1,7 @@
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
-import { TEAM, TEAMMATE, USER, agentSession, fakeServer, renderApp } from './helpers.tsx';
+import { TEAM, TEAMMATE, USER, agentSession, fakeServer, liveEvent, renderApp } from './helpers.tsx';
 
 const openPitWall = () => renderApp(`/t/${TEAM.id}`);
 
@@ -62,33 +62,64 @@ describe('demo race', () => {
   });
 });
 
-describe('once agents report in', () => {
-  it('counts cars on track, lists sessions, and drops the checklist once you are connected', async () => {
+describe('once agents are on track', () => {
+  it('shows them on the timing tower, counts them, and drops the setup steps once you are connected', async () => {
     const server = fakeServer({ signedIn: true });
     server.state.sessions.set(TEAM.id, [
-      agentSession({ userId: TEAMMATE.id, userEmail: TEAMMATE.email, userName: 'Nimal', repoName: 'web', lastAction: 'bash pnpm test' }),
-      agentSession({ status: 'idle', lastAction: 'finished responding' }),
-      agentSession({ status: 'ended', userId: TEAMMATE.id, userEmail: TEAMMATE.email, lastAction: 'session ended (other)' }),
+      agentSession({ userId: TEAMMATE.id, userEmail: TEAMMATE.email, userName: 'Nimal', repoName: 'web', toolCalls: 12 }),
+      agentSession({ status: 'idle', toolCalls: 3 }),
+      agentSession({ status: 'ended', userId: TEAMMATE.id, userEmail: TEAMMATE.email }),
     ]);
     openPitWall();
 
-    expect(await screen.findByRole('heading', { level: 1, name: '1 car on track' })).toBeInTheDocument();
+    const tower = await screen.findByRole('region', { name: 'Timing tower' });
+    const rows = within(tower).getAllByRole('button');
+    expect(rows.map((r) => r.getAttribute('aria-label'))).toEqual([
+      'P1, Nimal, Claude Code, Working, 12 laps',
+      'P2, lead@example.test, Claude Code, Idle, 3 laps',
+    ]);
+    expect(screen.getByRole('heading', { level: 1, name: 'Pit wall' })).toHaveClass('sr-only');
     expect(screen.queryByRole('list', { name: 'Connect your agent' })).not.toBeInTheDocument();
-    const rows = within(screen.getByRole('list', { name: 'Sessions' })).getAllByRole('listitem');
-    expect(rows).toHaveLength(3);
-    expect(rows[0]).toHaveTextContent('Working');
-    expect(rows[0]).toHaveTextContent('Nimal · web');
-    expect(rows[0]).toHaveTextContent('bash pnpm test');
-    expect(rows[1]).toHaveTextContent('Idle');
-    expect(rows[2]).toHaveTextContent('Ended');
+    expect(screen.queryByRole('link', { name: /Connect your own agent/ })).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Agents by status')).toBeInTheDocument();
   });
 
-  it("keeps showing you the steps while only teammates are connected", async () => {
+  it('offers to connect your own agent while only teammates are on track', async () => {
     const server = fakeServer({ signedIn: true });
     server.state.sessions.set(TEAM.id, [agentSession({ userId: TEAMMATE.id, userEmail: TEAMMATE.email })]);
     openPitWall();
 
+    expect(await screen.findByRole('link', { name: /Connect your own agent/ })).toHaveAttribute(
+      'href',
+      `/t/${TEAM.id}/settings#connect`,
+    );
+  });
+
+  it("opens a driver's live commands from the tower", async () => {
+    const server = fakeServer({ signedIn: true });
+    const session = agentSession({ userId: TEAMMATE.id, userEmail: TEAMMATE.email, userName: 'Nimal', repoName: 'api' });
+    server.state.sessions.set(TEAM.id, [session]);
+    server.state.events.set(TEAM.id, [
+      liveEvent({ sessionId: session.id, type: 'PreToolUse', toolName: 'Edit', target: 'src/app.ts', summary: 'edit src/app.ts' }),
+      liveEvent({ sessionId: session.id, type: 'PostToolUseFailure', toolName: 'Bash', target: 'pnpm test', summary: 'bash pnpm test · failed' }),
+    ]);
+    openPitWall();
+
+    await userEvent.click(await screen.findByRole('button', { name: /Nimal/ }));
+
+    const panel = screen.getByRole('complementary', { name: "Nimal's agent" });
+    const commands = within(panel).getByRole('list', { name: 'Live commands' });
+    expect(commands).toHaveTextContent('edit src/app.ts');
+    expect(commands).toHaveTextContent('bash pnpm test · failed');
+    expect(within(panel).getByText('Claude Code · api')).toBeInTheDocument();
+  });
+
+  it('goes back to the empty track when every session has ended', async () => {
+    const server = fakeServer({ signedIn: true });
+    server.state.sessions.set(TEAM.id, [agentSession({ status: 'ended' })]);
+    openPitWall();
+
     expect(await screen.findByRole('list', { name: 'Sessions' })).toBeInTheDocument();
-    expect(screen.getByRole('list', { name: 'Connect your agent' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'No cars on track' })).toBeInTheDocument();
   });
 });

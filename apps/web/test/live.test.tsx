@@ -39,8 +39,8 @@ describe('live channel', () => {
       }),
     );
 
-    expect(await screen.findByRole('heading', { level: 1, name: '1 car on track' })).toBeInTheDocument();
-    expect(within(screen.getByRole('list', { name: 'Sessions' })).getByText('edit src/app.ts')).toBeInTheDocument();
+    const tower = await screen.findByRole('region', { name: 'Timing tower' });
+    expect(within(tower).getByRole('button', { name: /P1, Nimal/ })).toBeInTheDocument();
   });
 
   it('ignores messages it does not understand', async () => {

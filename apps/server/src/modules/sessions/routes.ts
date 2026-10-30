@@ -1,4 +1,10 @@
-import { agentSessionSchema, errorResponseSchema, hookSetupSchema, teamParamsSchema } from '@race-control/shared';
+import {
+  agentSessionSchema,
+  errorResponseSchema,
+  hookSetupSchema,
+  liveEventSchema,
+  teamParamsSchema,
+} from '@race-control/shared';
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
@@ -8,6 +14,7 @@ import { getTeamAuth, teamAccess } from '../../plugins/team-access.ts';
 import * as repo from './repo.ts';
 
 const LIST_LIMIT = 50;
+const EVENTS_LIMIT = 200;
 
 export function sessionRoutes(app: FastifyInstance, deps: AppDeps) {
   const r = app.withTypeProvider<ZodTypeProvider>();
@@ -25,6 +32,18 @@ export function sessionRoutes(app: FastifyInstance, deps: AppDeps) {
       const rows = await repo.listRecentSessions(deps.db, getTeamAuth(request).teamId, LIST_LIMIT);
       return rows.map(repo.serializeSession);
     },
+  );
+
+  r.get(
+    '/teams/:teamId/events',
+    {
+      preHandler: teamAccess(deps),
+      schema: {
+        params: teamParamsSchema,
+        response: { 200: z.array(liveEventSchema), 401: errorResponseSchema, 404: errorResponseSchema },
+      },
+    },
+    async (request) => repo.listRecentEvents(deps.db, getTeamAuth(request).teamId, EVENTS_LIMIT),
   );
 
   // Where agents send hooks, for the settings snippet in the dashboard.

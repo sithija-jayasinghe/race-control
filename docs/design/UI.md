@@ -45,6 +45,14 @@ Each status always has a word as well as a colour, so it never relies on colour 
 | **Approval card** | Blue kerb stripe, who wants to do what, a countdown to auto-deny, Deny and Approve (Week 4) |
 | **Command palette** | ⌘K to jump to any agent, file or rule (added when there is something to jump to) |
 
+## Who's on the track
+
+- Every working session that reported in the last 2 hours.
+- Plus each person's latest idle session, for 10 minutes, only if they have nothing working. Finished sessions don't crowd the tower.
+- **Laps** are tool calls. **Sectors** are the last three outcomes: purple = tests passed, green = clean, red = failed or blocked.
+- **Yellow flag:** two working agents whose latest file is the same, touched within 30 minutes.
+- On phones the map is hidden; the tower and the session list remain.
+
 ## Layout
 
 ```text

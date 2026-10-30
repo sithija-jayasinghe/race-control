@@ -21,6 +21,10 @@ function selectSessionViews(db: DbOrTx, teamId: string) {
         where ${events.sessionId} = ${sessions.id} and ${events.teamId} = ${teamId}
         order by ${events.createdAt} desc limit 1
       )`,
+      toolCalls: sql<number>`(
+        select count(*)::int from ${events}
+        where ${events.sessionId} = ${sessions.id} and ${events.teamId} = ${teamId} and ${events.type} = 'PreToolUse'
+      )`,
     })
     .from(sessions)
     .innerJoin(users, eq(users.id, sessions.userId));
@@ -50,4 +54,24 @@ export function serializeSession(s: SessionView) {
     lastEventAt: s.lastEventAt.toISOString(),
     endedAt: s.endedAt?.toISOString() ?? null,
   };
+}
+
+/** A team's most recent events, oldest first, for the live map and feed. */
+export async function listRecentEvents(db: DbOrTx, teamId: string, limit: number) {
+  const rows = await db
+    .select({
+      id: events.id,
+      sessionId: events.sessionId,
+      type: events.type,
+      toolName: events.toolName,
+      target: events.target,
+      summary: events.summary,
+      decision: events.decision,
+      createdAt: events.createdAt,
+    })
+    .from(events)
+    .where(eq(events.teamId, teamId))
+    .orderBy(desc(events.createdAt))
+    .limit(limit);
+  return rows.reverse().map((e) => ({ ...e, createdAt: e.createdAt.toISOString() }));
 }

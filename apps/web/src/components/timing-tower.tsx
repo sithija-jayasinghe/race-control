@@ -2,12 +2,13 @@ import { FLAGS, type FlagStatus } from '@/components/status-flag';
 import { cn } from '@/lib/utils';
 
 /** What one recent action was, coloured like F1 sector times. */
-export type Sector = 'clean' | 'tests' | 'yellow' | 'blocked';
+export type Sector = 'clean' | 'tests' | 'yellow' | 'failed' | 'blocked';
 
 const SECTOR_COLORS: Record<Sector, string> = {
   clean: 'var(--flag-green)',
   tests: 'var(--sector-purple)',
   yellow: 'var(--flag-yellow)',
+  failed: 'var(--flag-red)',
   blocked: 'var(--flag-red)',
 };
 

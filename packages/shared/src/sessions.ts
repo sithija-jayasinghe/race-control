@@ -15,6 +15,8 @@ export const agentSessionSchema = z.object({
   endedAt: z.iso.datetime().nullable(),
   /** The latest event's one-line summary, e.g. "edit src/app.ts". */
   lastAction: z.string().nullable(),
+  /** Tool calls so far (PreToolUse events): the session's "laps" on the timing tower. */
+  toolCalls: z.number().int().nonnegative(),
 });
 export type AgentSession = z.infer<typeof agentSessionSchema>;
 

@@ -38,6 +38,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - The Pit wall lists the team's sessions as they report in (status, who, repo, last action), counts the cars on track, and hides the setup steps once your own agent is connected.
 - Session simulator: `pnpm simulate` replays a scripted race of five demo drivers (a shared-file collision, a migration, a failing test, a `.env` edit, a secret in a command) through the real hook endpoint in a "Demo team". `--viewer` adds you to watch, `--loop` and `--speed` control the race, `--reset` removes the demo data. Refuses to run in production.
 - Live updates: the dashboard keeps a WebSocket open to the team's live channel, so new sessions and events appear the moment agents report them. A LIVE badge shows the connection; if it drops, the page reconnects by itself and refreshes every 10 seconds meanwhile. Only members of the team, on the dashboard's own site, can connect.
+- The live Pit wall: a 3D map of the codebase where folders glow as clusters, files are points, and each agent is an orb that flies to the file it's working on, leaving a light trail. Two working agents on the same file both turn yellow. The timing tower ranks agents by tool calls (laps) with sector colours for their last three actions; click one for their live command stream. Idle sessions collapse to one per person and leave after 10 minutes. On phones: the tower without the map.
 
 ### Removed
 - `SESSION_SECRET` from `.env.example`. Login sessions are looked up by hash, so nothing needs signing.
