@@ -25,6 +25,8 @@ test-results/
 
 # Claude Code personal settings
 .claude/settings.local.json
+# Dev-server entries for the Claude desktop app's browser preview
+.claude/launch.json
 
 # IDE and OS
 .idea/
