@@ -3,8 +3,11 @@ import { Navigate, Outlet, useLocation, useOutletContext, useParams, type RouteO
 import { FullScreen } from '@/components/full-screen';
 import { StartLights } from '@/components/start-lights';
 import { rememberNextPath, useMe } from '@/lib/auth';
+import { useLiveTeam, type LiveStatus } from '@/lib/live';
 import { InvitePage } from '@/pages/invite';
 import { PitWallPage } from '@/pages/pit-wall';
+import { SessionPage } from '@/pages/session';
+import { SessionsPage } from '@/pages/sessions';
 import { SettingsPage } from '@/pages/settings';
 import { SignInPage } from '@/pages/sign-in';
 import { StartPage } from '@/pages/start';
@@ -12,7 +15,7 @@ import { TeamPage } from '@/pages/team';
 import { VerifyPage } from '@/pages/verify';
 
 type SignedInContext = { me: MeResponse };
-type TeamContext = SignedInContext & { team: MyTeam };
+type TeamContext = SignedInContext & { team: MyTeam; live: LiveStatus };
 
 export const useSignedInContext = () => useOutletContext<SignedInContext>();
 export const useTeamContext = () => useOutletContext<TeamContext>();
@@ -67,7 +70,13 @@ function TeamLayout() {
   const { teamId } = useParams();
   const team = me.teams.find((t) => t.id === teamId);
   if (!team) return <NotFound />;
-  return <Outlet context={{ me, team } satisfies TeamContext} />;
+  return <TeamLive me={me} team={team} />;
+}
+
+/** One live connection for all of a team's pages. */
+function TeamLive({ me, team }: { me: MeResponse; team: MyTeam }) {
+  const live = useLiveTeam(team.id);
+  return <Outlet context={{ me, team, live } satisfies TeamContext} />;
 }
 
 function NotFound() {
@@ -106,6 +115,8 @@ export const routes: RouteObject[] = [
         element: <TeamLayout />,
         children: [
           { index: true, element: <PitWallPage /> },
+          { path: 'sessions', element: <SessionsPage /> },
+          { path: 'sessions/:sessionId', element: <SessionPage /> },
           { path: 'team', element: <TeamPage /> },
           { path: 'settings', element: <SettingsPage /> },
         ],

@@ -17,6 +17,8 @@ export default defineConfig({
       '/api': {
         target: serverUrl,
         rewrite: (path) => path.replace(/^\/api/, ''),
+        // The team live channel is a WebSocket.
+        ws: true,
       },
     },
   },

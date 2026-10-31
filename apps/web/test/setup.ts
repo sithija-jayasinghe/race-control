@@ -32,3 +32,44 @@ export function setSystemDark(dark: boolean) {
   media.prefersDark = dark;
   for (const listener of listeners) listener();
 }
+
+/** A WebSocket stand-in: tests open it, push messages and close it by hand. */
+export class FakeWebSocket {
+  static instances: FakeWebSocket[] = [];
+  onopen: (() => void) | null = null;
+  onmessage: ((event: { data: string }) => void) | null = null;
+  onclose: (() => void) | null = null;
+  closed = false;
+  readonly url: string;
+
+  constructor(url: string) {
+    this.url = url;
+    FakeWebSocket.instances.push(this);
+  }
+
+  open() {
+    this.onopen?.();
+  }
+
+  receive(message: unknown) {
+    this.onmessage?.({ data: typeof message === 'string' ? message : JSON.stringify(message) });
+  }
+
+  close() {
+    if (this.closed) return;
+    this.closed = true;
+    this.onclose?.();
+  }
+
+  /** The most recent socket that's still open. */
+  static latest(): FakeWebSocket {
+    const socket = [...FakeWebSocket.instances].reverse().find((s) => !s.closed);
+    if (!socket) throw new Error('no open FakeWebSocket');
+    return socket;
+  }
+}
+
+vi.stubGlobal('WebSocket', FakeWebSocket);
+afterEach(() => {
+  FakeWebSocket.instances = [];
+});

@@ -81,6 +81,86 @@ describe('GET /teams/:teamId/sessions', () => {
   });
 });
 
+describe('GET /teams/:teamId/events', () => {
+  it("returns the team's recent events, oldest first, and counts tool calls as laps", async () => {
+    const leadToken = await tokenFor(lead);
+    await hook(leadToken, 'PreToolUse', { session_id: 'a', cwd: '/Users/l/code/api', tool_name: 'Read', tool_input: { file_path: '/Users/l/code/api/a.ts' } });
+    t.clock.advance(1000);
+    await hook(leadToken, 'PostToolUse', { session_id: 'a', cwd: '/Users/l/code/api', tool_name: 'Read', tool_input: { file_path: '/Users/l/code/api/a.ts' } });
+    t.clock.advance(1000);
+    await hook(leadToken, 'PreToolUse', { session_id: 'a', cwd: '/Users/l/code/api', tool_name: 'Bash', tool_input: { command: 'pnpm test' } });
+
+    const events = await lead.request('GET', `/teams/${teamId}/events`);
+    const sessions = await lead.request('GET', `/teams/${teamId}/sessions`);
+
+    expect(events.json<Array<{ type: string; target: string }>>().map((e) => [e.type, e.target])).toEqual([
+      ['PreToolUse', 'a.ts'],
+      ['PostToolUse', 'a.ts'],
+      ['PreToolUse', 'pnpm test'],
+    ]);
+    expect(sessions.json<Array<{ toolCalls: number }>>()[0]!.toolCalls).toBe(2);
+  });
+
+  it('is invisible to other teams', async () => {
+    const outsider = await signInAs(t, 'outsider@example.test');
+
+    expect((await outsider.request('GET', `/teams/${teamId}/events`)).statusCode).toBe(404);
+  });
+});
+
+describe('GET /teams/:teamId/sessions/:sessionId', () => {
+  async function sessionIdFor(user: SignedInUser) {
+    const [session] = (await user.request('GET', `/teams/${teamId}/sessions`)).json<Array<{ id: string }>>();
+    return session!.id;
+  }
+
+  it('returns the session and every step, oldest first, with failure and end details', async () => {
+    const devToken = await tokenFor(dev);
+    const cwd = '/Users/d/code/web';
+    await hook(devToken, 'SessionStart', { session_id: 'b', cwd, source: 'startup', model: 'claude-opus' });
+    t.clock.advance(1000);
+    await hook(devToken, 'PreToolUse', { session_id: 'b', cwd, tool_name: 'Bash', tool_input: { command: 'pnpm build' } });
+    t.clock.advance(1000);
+    await hook(devToken, 'PostToolUseFailure', {
+      session_id: 'b',
+      cwd,
+      tool_name: 'Bash',
+      tool_input: { command: 'pnpm build' },
+      error: 'exit code 1',
+    });
+    t.clock.advance(1000);
+    await hook(devToken, 'SessionEnd', { session_id: 'b', cwd, reason: 'logout' });
+
+    const response = await lead.request('GET', `/teams/${teamId}/sessions/${await sessionIdFor(lead)}`);
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json<{ session: { userEmail: string; status: string }; events: Array<{ type: string; detail: string | null }>; truncated: boolean }>();
+    expect(body.session).toMatchObject({ userEmail: 'dev@example.test', status: 'ended' });
+    expect(body.truncated).toBe(false);
+    expect(body.events.map((e) => [e.type, e.detail])).toEqual([
+      ['SessionStart', 'startup · claude-opus'],
+      ['PreToolUse', null],
+      ['PostToolUseFailure', 'exit code 1'],
+      ['SessionEnd', 'logout'],
+    ]);
+  });
+
+  it('is invisible to other teams, even with the right session id', async () => {
+    await hook(await tokenFor(dev), 'SessionStart', { session_id: 'b', cwd: '/x/web', source: 'startup' });
+    const sessionId = await sessionIdFor(dev);
+    const outsider = await signInAs(t, 'outsider@example.test');
+    const otherTeam = await createTeamAs(outsider, 'Other');
+
+    expect((await outsider.request('GET', `/teams/${teamId}/sessions/${sessionId}`)).statusCode).toBe(404);
+    expect((await outsider.request('GET', `/teams/${otherTeam}/sessions/${sessionId}`)).statusCode).toBe(404);
+  });
+
+  it('answers 404 for unknown sessions and 400 for malformed ids', async () => {
+    expect((await dev.request('GET', `/teams/${teamId}/sessions/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa`)).statusCode).toBe(404);
+    expect((await dev.request('GET', `/teams/${teamId}/sessions/nope`)).statusCode).toBe(400);
+  });
+});
+
 describe('GET /setup/hooks', () => {
   it('tells signed-in people where agents send hooks', async () => {
     const response = await lead.request('GET', '/setup/hooks');

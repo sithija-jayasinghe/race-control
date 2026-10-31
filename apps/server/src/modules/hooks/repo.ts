@@ -63,5 +63,7 @@ export async function insertEvent(
     createdAt: Date;
   },
 ) {
-  await db.insert(events).values(values);
+  const [row] = await db.insert(events).values(values).returning({ id: events.id });
+  if (!row) throw new Error('event insert returned nothing');
+  return row.id;
 }

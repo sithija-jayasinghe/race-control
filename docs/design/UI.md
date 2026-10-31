@@ -45,6 +45,15 @@ Each status always has a word as well as a colour, so it never relies on colour 
 | **Approval card** | Blue kerb stripe, who wants to do what, a countdown to auto-deny, Deny and Approve (Week 4) |
 | **Command palette** | ⌘K to jump to any agent, file or rule (added when there is something to jump to) |
 
+## Who's on the track
+
+- Every working session that reported in the last 2 hours.
+- Plus each person's latest idle session, for 10 minutes, only if they have nothing working. Finished sessions don't crowd the tower.
+- **Laps** are tool calls. **Sectors** are the last three outcomes: purple = tests passed, green = clean, red = failed or blocked.
+- **Yellow flag:** two people edited the same file in the same repo within 30 minutes (reads don't count; one person's sessions never flag each other). The server decides; the Pit wall shows a Race Control banner per file (newest first, at most three, then "+n more"), turns those working drivers yellow, and the timeline tags the edit. A dismissed banner returns when someone new joins the overlap. Banners only show while cars are on track.
+- **Team Radio:** when the server sends an agent a heads-up, the Pit wall shows a Team Radio card from Race Control to that driver ("TEAM RADIO RC → KAS", "Nimal edited src/auth/session.ts 2 min ago") for 15 seconds, latest only. The timeline tags the step that heard it, with who it was about.
+- On phones the map is hidden; the tower and the session list remain.
+
 ## Layout
 
 ```text
@@ -64,7 +73,7 @@ Desktop                                              Phone
 
 - **Desktop:** a thin floating icon rail with tooltips; a top bar with the wordmark, team, counters, LIVE clock and theme menu.
 - **Phone:** the same top bar without counters; a floating glass tab bar with icons; the tower goes full width above the scene.
-- Navigation items for later weeks (Sessions, Approvals, Rules) appear only once they're built. Everything team-specific lives under `/t/:teamId/...`.
+- Navigation: Pit wall, Sessions, Team, Settings. Items for later weeks (Approvals, Rules) appear only once they're built. Everything team-specific lives under `/t/:teamId/...`.
 - Every screen works from 360 px wide, with no horizontal scrolling and tap targets of at least 44 px.
 
 ## Building blocks
@@ -99,7 +108,7 @@ Desktop                                              Phone
 | Pit wall (Week 1: empty track, connect checklist, and a demo race at `?demo=1`) | `/t/:teamId` | 1, live map in Week 3 |
 | Team: members and invite links | `/t/:teamId/team` | 1 |
 | Settings: your tokens, theme | `/t/:teamId/settings` | 1 |
-| Session timeline | `/t/:teamId/sessions/:id` | 3 |
+| Sessions (filter by status) and session timeline | `/t/:teamId/sessions`, `/t/:teamId/sessions/:id` | 3 |
 | Rules | `/t/:teamId/rules` | 4 |
 | Approvals queue and approval card | `/t/:teamId/approvals`, `/t/:teamId/approvals/:id` | 4 |
 

@@ -20,8 +20,9 @@ function rateLimitKey(request: FastifyRequest): string {
 /**
  * `POST /hooks/:event`: where Claude Code's HTTP hooks send events (SPEC section 4).
  *
- * Always answers fast with an empty 200, which Claude Code reads as "no decision", so agents carry on.
- * Events Race Control doesn't record are accepted and ignored. Guardrail decisions arrive in Week 4.
+ * Answers fast with an empty 200, which Claude Code reads as "no decision", so agents carry on. The one
+ * exception is a Team Radio heads-up, sent as `additionalContext` with still no decision. Events Race
+ * Control doesn't record are accepted and ignored. Guardrail decisions arrive in Week 4.
  */
 export function hookRoutes(app: FastifyInstance, deps: AppDeps) {
   app.post(
@@ -42,7 +43,10 @@ export function hookRoutes(app: FastifyInstance, deps: AppDeps) {
         return reply.code(400).send({ error: 'invalid_payload' });
       }
 
-      await ingestHookEvent(deps, request.devAuth!, event, parsed.data);
+      const outcome = await ingestHookEvent(deps, request.devAuth!, event, parsed.data);
+      if (outcome.additionalContext) {
+        return reply.code(200).send({ hookSpecificOutput: { hookEventName: event, additionalContext: outcome.additionalContext } });
+      }
       return reply.code(200).send();
     },
   );

@@ -1,7 +1,7 @@
 import { eq, sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import * as schema from '../src/db/schema.ts';
-import { describe as describeStep, runRace, type Send } from '../src/simulator/run.ts';
+import { describe as describeStep, readHookReply, runRace, type Send } from '../src/simulator/run.ts';
 import { DEMO_TEAM_NAME, DRIVERS, LAP_MS, steps } from '../src/simulator/scenario.ts';
 import { SimulatorSetupError, resetDemo, revokeSimulatorTokens, setupDemoTeam } from '../src/simulator/setup.ts';
 import { createTeamAs, createTestApp, signInAs, type TestApp } from './helpers/app.ts';
@@ -24,7 +24,7 @@ const injectSend: Send = async (event, token, body) => {
     headers: { authorization: `Bearer ${token}` },
     payload: body,
   });
-  return response.statusCode;
+  return readHookReply(response.statusCode, response.body);
 };
 
 /** A clock that jumps forward instead of waiting. */
@@ -129,6 +129,10 @@ describe('runRace', () => {
     expect(stored).not.toContain('sk_live_');
     expect(stored).not.toContain('ALTER TABLE');
     expect(lines[0]).toMatch(/^NIM {2}● session start$/);
+    // Kasun's agent reads session.ts after Nimal edited it, and hears about it.
+    expect(lines.filter((l) => l.includes('📻'))).toEqual([
+      "KAS  📻 Race Control (team note): Nimal's Claude Code agent edited `src/auth/session.ts` less than a minute ago in another session. Those changes may not be in your copy yet.",
+    ]);
 
     await runRace({ send: injectSend, tokens: demo.tokens, laps: 1, speed: 1, ...instantClock(), runId: 'second' });
     expect(await t.db.$count(schema.sessions, eq(schema.sessions.teamId, demo.teamId))).toBe(10);
@@ -138,7 +142,7 @@ describe('runRace', () => {
     const demo = await setupDemoTeam(t.db, { now: t.clock.now() });
     const clock = instantClock();
 
-    await runRace({ send: () => Promise.resolve(200), tokens: demo.tokens, laps: 1, speed: 4, ...clock });
+    await runRace({ send: () => Promise.resolve({ status: 200 }), tokens: demo.tokens, laps: 1, speed: 4, ...clock });
 
     const last = Math.max(...steps(1).map((s) => s.at));
     expect(clock.now()).toBeGreaterThanOrEqual(last / 4);
@@ -150,7 +154,7 @@ describe('runRace', () => {
     let sends = 0;
 
     const stats = await runRace({
-      send: () => Promise.resolve(++sends === 1 ? 500 : 200),
+      send: () => Promise.resolve({ status: ++sends === 1 ? 500 : 200 }),
       tokens: demo.tokens,
       laps: Number.POSITIVE_INFINITY,
       speed: 1,
@@ -170,7 +174,7 @@ describe('cleaning up', () => {
     await runRace({ send: injectSend, tokens: demo.tokens, laps: 1, speed: 1, ...instantClock() });
 
     await revokeSimulatorTokens(t.db, demo.tokenIds, t.clock.now());
-    expect(await injectSend('Stop', demo.tokens.get('NIM')!, { session_id: 'x', hook_event_name: 'Stop' })).toBe(401);
+    expect(await injectSend('Stop', demo.tokens.get('NIM')!, { session_id: 'x', hook_event_name: 'Stop' })).toMatchObject({ status: 401 });
 
     const removed = await resetDemo(t.db);
 

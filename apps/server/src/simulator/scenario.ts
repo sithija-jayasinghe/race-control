@@ -65,10 +65,11 @@ const SCRIPT: Step[] = [
   ...call('NIM', 26000, edit('src/auth/refresh.ts')),
   stop('NIM', 34000),
 
-  // Kasun works in the same file a few seconds later: a collision for the yellow flag (Week 3).
+  // Kasun works in the same file a few seconds later: a collision for the yellow flag, and Team Radio
+  // tells Kasun's agent about Nimal's edit when it reads the file.
   start('KAS', 2500),
-  ...call('KAS', 6000, read('src/auth/session.ts')),
-  ...call('KAS', 11000, edit('src/auth/session.ts'), 1500),
+  ...call('KAS', 10500, read('src/auth/session.ts')),
+  ...call('KAS', 13000, edit('src/auth/session.ts'), 1500),
   ...call('KAS', 20000, bash('pnpm lint'), 2500),
   stop('KAS', 30000),
 

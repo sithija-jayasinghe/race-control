@@ -163,6 +163,7 @@ Starter rules to seed every new team:
 - **Team isolation:** every query is scoped by `teamId` from the authenticated token or session. Add tests that prove one team can't read another's data. In the API, a `:teamId` in the URL is only used after the user's membership is confirmed; teams you aren't in answer `404`, exactly like teams that don't exist.
 - **Invites** are reusable links that expire after 7 days and can be revoked by a lead. Like magic links, the token sits in the URL fragment and only its hash is stored. A team always keeps at least one lead.
 - **Rate limit** the ingest endpoints per token.
+- **Live channel** (`GET /teams/:teamId/live`, WebSocket): only signed-in members of the team, and only from the dashboard's own origin (`WEB_URL`), because browsers send cookies on WebSocket handshakes from any site. Each team is its own channel inside the server, and only redacted metadata is sent.
 - **Agent-to-agent text is untrusted.** Anything Race Control puts into an agent's context (Team Radio) could be used for prompt injection. Heads-ups are built by the server from stored metadata (who, which file, when, which agent), never from free text another agent wrote. Free-text notes (Phase 2) are length-limited, redacted, clearly labelled as information rather than instructions, and a lead can turn them off.
 
 ## 7. Data model
@@ -231,8 +232,8 @@ Index `events(team_id, created_at desc)`, `events(session_id, created_at)` and `
 - WebSocket channel per team
 - Team view: who's active, on which repo, last action
 - Live event feed and per-session timeline
-- **Yellow flag:** highlight when two sessions touch the same `target` within a time window
-- **Team Radio heads-ups:** reply to `PreToolUse` with `additionalContext` when another agent touched the same file recently
+- **Yellow flag:** highlight when two people's sessions edit the same `target` in the same repo within a time window (30 minutes)
+- **Team Radio heads-ups:** reply to `PreToolUse` with `additionalContext` when an agent reads or edits a file another person edited in the same repo within 30 minutes
 
 **Week 4 — Guardrails and approvals**
 - Rules CRUD UI with the starter rules
@@ -270,7 +271,7 @@ Index `events(team_id, created_at desc)`, `events(session_id, created_at)` and `
 - One team can never see another team's data (tests prove it)
 - Hook overhead is under 50 ms when no rule matches
 - The public demo works without any real agent, thanks to the simulator
-- When two simulated developers edit the same file, the second agent receives a Team Radio heads-up
+- When two simulated developers edit the same file, the second agent receives a Team Radio heads-up (when it reads the file)
 
 ## 12. What makes Race Control different
 
@@ -280,19 +281,21 @@ Other tools already offer a live view, hook guardrails and approvals (see [docs/
 
 In F1, the team radio keeps every driver aware of what's happening on track. Race Control already sees every agent's actions across the team, so it can tell each agent what the others are doing.
 
-**Part 1: heads-ups (MVP, Claude Code).** When an agent is about to touch a `target` that another session on the same team and repo touched recently, Race Control answers `PreToolUse` with `additionalContext`:
+**Part 1: heads-ups (MVP, Claude Code).** When an agent is about to read or edit a `target` that another person on the same team edited in the same repo recently, Race Control answers `PreToolUse` with `additionalContext` and no `permissionDecision`:
 
 ```json
 {
   "hookSpecificOutput": {
     "hookEventName": "PreToolUse",
-    "additionalContext": "Race Control: Nimal's codex agent edited src/auth/session.ts 2 minutes ago. Check for conflicting changes before editing it."
+    "additionalContext": "Race Control (team note): Nimal's Claude Code agent edited `src/auth/session.ts` 2 minutes ago in another session. Those changes may not be in your copy yet."
   }
 }
 ```
 
-- The message is built only from stored metadata (developer name, agent, target, time). It never includes another agent's free text, file contents or prompts.
-- To keep noise and token cost down, only send it on overlap, at most once per target per session, within a configurable window (default 30 minutes).
+- Claude Code adds `additionalContext` alongside the tool's result, after the tool runs. Claude Code reads a file before editing it, so the heads-up on the read is the one that arrives before any edit. A heads-up on an edit still tells the agent afterwards.
+- The message is built only from stored metadata (developer name, agent, target, time). It never includes another agent's free text, file contents or prompts. Names keep only letters, digits, spaces and `. ' - _` (at most 40 characters); paths lose control characters, `<`, `>` and backticks (at most 200 characters). The wording is factual rather than a command, as Claude Code's docs advise.
+- To keep noise and token cost down, only send it on overlap, at most once per target per session, within a window of 30 minutes (a lead setting later). One person's own sessions never trigger it. The event that carried a heads-up is marked, which is how "once per session" is checked and how the timeline tags it.
+- The dashboard gets a `radio` live message (who heard it, about whom, which file), not the message text, and shows it as a Team Radio card.
 - The same overlap check drives the lead's **yellow flag** on the dashboard.
 - The developer pastes nothing extra: it reuses the `PreToolUse` hook.
 

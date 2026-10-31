@@ -1,6 +1,7 @@
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { buildApp } from '../../src/app.ts';
 import type { Mailer } from '../../src/lib/mailer.ts';
+import { TeamBus } from '../../src/lib/team-bus.ts';
 import { SESSION_COOKIE } from '../../src/plugins/auth.ts';
 import { createTestDb, type TestDb } from './db.ts';
 
@@ -34,6 +35,7 @@ export type TestApp = {
   app: FastifyInstance;
   db: TestDb;
   clock: ReturnType<typeof createClock>;
+  bus: TeamBus;
   sent: Array<{ to: string; url: string }>;
   close: () => Promise<void>;
 };
@@ -42,8 +44,10 @@ export async function createTestApp(options: { cookieSecure?: boolean } = {}): P
   const { db, close: closeDb } = await createTestDb();
   const clock = createClock();
   const { mailer, sent } = createMemoryMailer();
+  const bus = new TeamBus();
   const app = await buildApp({
     db,
+    bus,
     mailer,
     webUrl: TEST_WEB_URL,
     publicUrl: TEST_PUBLIC_URL,
@@ -55,6 +59,7 @@ export async function createTestApp(options: { cookieSecure?: boolean } = {}): P
     app,
     db,
     clock,
+    bus,
     sent,
     close: async () => {
       await app.close();

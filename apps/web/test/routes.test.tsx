@@ -82,9 +82,10 @@ describe('signed in', () => {
     expect(navs).toHaveLength(2);
     for (const nav of navs) {
       const links = within(nav).getAllByRole('link');
-      expect(links.map((link) => link.getAttribute('aria-label'))).toEqual(['Pit wall', 'Team', 'Settings']);
+      expect(links.map((link) => link.getAttribute('aria-label'))).toEqual(['Pit wall', 'Sessions', 'Team', 'Settings']);
       expect(links.map((link) => link.getAttribute('href'))).toEqual([
         `/t/${TEAM.id}`,
+        `/t/${TEAM.id}/sessions`,
         `/t/${TEAM.id}/team`,
         `/t/${TEAM.id}/settings`,
       ]);
