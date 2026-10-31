@@ -35,7 +35,7 @@ export function teamRoutes(app: FastifyInstance, deps: AppDeps) {
       schema: { body: createTeamRequestSchema, response: { 201: myTeamSchema, 401: errorResponseSchema } },
     },
     async (request, reply) => {
-      const team = await createTeam(deps.db, request.user!.id, request.body.name);
+      const team = await createTeam(deps.db, request.user!.id, request.body.name, deps.now());
       return reply.code(201).send(team);
     },
   );

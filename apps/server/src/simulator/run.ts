@@ -2,8 +2,8 @@ import type { IngestedHookEvent } from '@race-control/shared';
 import { recordToolCall } from '../lib/redact.ts';
 import { LAP_MS, steps, type Step } from './scenario.ts';
 
-/** The HTTP status, and the Team Radio heads-up the reply carried, if any. */
-export type SendResult = { status: number; radio?: string };
+/** The HTTP status, plus a rule's decision and a Team Radio heads-up if the reply carried them. */
+export type SendResult = { status: number; decision?: string; reason?: string; radio?: string };
 
 /** Sends one hook event the way Claude Code does. */
 export type Send = (event: IngestedHookEvent, token: string, body: Record<string, unknown>) => Promise<SendResult>;
@@ -12,8 +12,14 @@ export type Send = (event: IngestedHookEvent, token: string, body: Record<string
 export function readHookReply(status: number, text: string): SendResult {
   if (!text) return { status };
   try {
-    const context = (JSON.parse(text) as { hookSpecificOutput?: { additionalContext?: unknown } }).hookSpecificOutput?.additionalContext;
-    return typeof context === 'string' ? { status, radio: context } : { status };
+    const output = (JSON.parse(text) as { hookSpecificOutput?: Record<string, unknown> }).hookSpecificOutput ?? {};
+    const pick = (key: string) => (typeof output[key] === 'string' ? output[key] : undefined);
+    return {
+      status,
+      decision: pick('permissionDecision'),
+      reason: pick('permissionDecisionReason'),
+      radio: pick('additionalContext'),
+    };
   } catch {
     return { status };
   }
@@ -95,10 +101,11 @@ export async function runRace({
       if (!token) throw new Error(`no token for driver ${step.driver}`);
       const body = { session_id: step.sessionId, cwd: step.cwd, hook_event_name: step.event, ...step.body };
       const started = now();
-      const { status, radio } = await send(step.event, token, body);
+      const { status, decision, reason, radio } = await send(step.event, token, body);
       latencies.push(now() - started);
       if (status !== 200) failed++;
       log(`${step.driver}  ${describe(step)}${status === 200 ? '' : `  (HTTP ${status})`}`);
+      if (decision) log(`${step.driver}  ${decision === 'deny' ? '⛔' : '✋'} ${decision}: ${reason ?? ''}`);
       if (radio) log(`${step.driver}  📻 ${radio}`);
     }
     if (lap < laps && !stopped()) await sleep(Math.max(0, (LAP_MS - (now() - lapStart) * speed) / speed));

@@ -84,6 +84,10 @@ function detailFrom(type: string, payload: unknown): string | null {
     return typeof value === 'string' ? value : null;
   };
   if (type === 'PostToolUseFailure') return pick('error');
+  const rule = p.rule as { name?: unknown; action?: unknown } | undefined;
+  if (type === 'PreToolUse' && typeof rule?.name === 'string') {
+    return rule.action === 'block' ? `Blocked by rule: ${rule.name}` : `Asked the developer, rule: ${rule.name}`;
+  }
   if (type === 'SessionEnd') return pick('reason');
   if (type === 'SessionStart') return [pick('source'), pick('model')].filter(Boolean).join(' · ') || null;
   return null;

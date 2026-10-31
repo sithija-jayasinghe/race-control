@@ -24,12 +24,14 @@ export type Step = {
   body: Record<string, unknown>;
 };
 
-type Tool = { tool: string; input: Record<string, unknown>; fails?: string };
+/** `blocked`: a team rule denies it, so Claude Code never runs it and sends no result. */
+type Tool = { tool: string; input: Record<string, unknown>; fails?: string; blocked?: boolean };
 
 /** A tool call is a PreToolUse, then a PostToolUse (or PostToolUseFailure) `took` ms later. */
-function call(driver: string, at: number, { tool, input, fails }: Tool, took = 900): Step[] {
+function call(driver: string, at: number, { tool, input, fails, blocked }: Tool, took = 900): Step[] {
   const toolUseId = `toolu_${driver}_${at}`;
   const common = { tool_name: tool, tool_input: input, tool_use_id: toolUseId };
+  if (blocked) return [{ at, driver, event: 'PreToolUse', body: common }];
   return [
     { at, driver, event: 'PreToolUse', body: common },
     fails
@@ -89,9 +91,10 @@ const SCRIPT: Step[] = [
   ...call('RUW', 29000, bash('pnpm test'), 5000),
   stop('RUW', 38000),
 
-  // Janith touches .env (blocked by a rule in Week 4) and runs a command with a key in it (redacted).
+  // Janith touches .env (blocked by the Demo team's enforced .env rule) and runs a command with a key in
+  // it (redacted).
   start('JAN', 7000),
-  ...call('JAN', 12000, edit('.env')),
+  ...call('JAN', 12000, { ...edit('.env'), blocked: true }),
   ...call('JAN', 18000, bash('curl -H "Authorization: Bearer sk_live_51HxDemoKeyAbCdEfGh" https://api.stripe.com/v1/charges'), 1500),
   ...call('JAN', 27000, { tool: 'WebFetch', input: { url: 'https://docs.stripe.com/api?key=abc123', prompt: 'Find the charges API' } }),
   stop('JAN', 33000),

@@ -1,6 +1,7 @@
 import {
   EDIT_TOOLS,
   TEAM_RADIO_TOOLS,
+  type EventDecision,
   type HookPayload,
   type IngestedHookEvent,
   type SessionStatus,
@@ -10,6 +11,7 @@ import type { AppDeps } from '../../app.ts';
 import { errorHeadline, hideHome, recordToolCall, redactSecrets, repoNameFromCwd } from '../../lib/redact.ts';
 import { findYellowFlags } from '../flags/repo.ts';
 import { findTeamRadio, radioMessage, radioName } from '../radio/service.ts';
+import { evaluateRules, type Evaluation } from '../rules/match.ts';
 import { findSessionView, serializeSession } from '../sessions/repo.ts';
 import type { DevTokenAuth } from '../tokens/service.ts';
 import * as repo from './repo.ts';
@@ -86,14 +88,32 @@ const editTools: readonly string[] = EDIT_TOOLS;
 const radioTools: readonly string[] = TEAM_RADIO_TOOLS;
 
 /** What the hook replies with, beyond "no decision". */
-export type HookOutcome = { additionalContext?: string };
+export type HookOutcome = {
+  /** A team rule's decision, and the reason shown with it. */
+  permission?: { decision: 'deny' | 'ask'; reason: string };
+  additionalContext?: string;
+};
+
+/** The reason Claude Code shows: to the agent for a block, in the developer's prompt for an ask. */
+function ruleReason(rule: NonNullable<Evaluation['enforced']>): string {
+  return rule.action === 'block' ? `Blocked by team rule: ${rule.name}` : `Race Control team rule: ${rule.name}`;
+}
+
+/** Checks a tool call against the team's rules. Matches on the raw command, which is never stored. */
+async function checkRules(deps: Pick<AppDeps, 'db' | 'rules'>, teamId: string, payload: HookPayload<'PreToolUse'>, target: string | null) {
+  const rules = await deps.rules.get(deps.db, teamId);
+  if (rules.length === 0) return { shadow: [] };
+  const command = payload.tool_name === 'Bash' && typeof payload.tool_input.command === 'string' ? payload.tool_input.command : null;
+  return evaluateRules(rules, { toolName: payload.tool_name, target, command });
+}
 
 /**
- * Records one hook event for the token's team and developer. Returns a Team Radio heads-up for the agent
- * when someone else on the team recently edited the file it's about to work on.
+ * Records one hook event for the token's team and developer, applying the team's rules to tool calls.
+ * Also returns a Team Radio heads-up when someone else on the team recently edited the file the agent is
+ * about to work on.
  */
 export async function ingestHookEvent<E extends IngestedHookEvent>(
-  deps: Pick<AppDeps, 'db' | 'now' | 'bus'>,
+  deps: Pick<AppDeps, 'db' | 'now' | 'bus' | 'rules'>,
   auth: DevTokenAuth,
   event: E,
   payload: HookPayload<E>,
@@ -102,7 +122,16 @@ export async function ingestHookEvent<E extends IngestedHookEvent>(
   const stored = toStoredEvent(event, payload);
   const repoName = repoNameFromCwd(payload.cwd);
 
-  const decision = 'none' as const;
+  const evaluation: Evaluation =
+    event === 'PreToolUse' ? await checkRules(deps, auth.teamId, payload as HookPayload<'PreToolUse'>, stored.target) : { shadow: [] };
+  const rule = evaluation.enforced;
+  const decision: EventDecision = !rule ? 'none' : rule.action === 'block' ? 'deny' : 'ask';
+  if (rule) stored.payload.rule = { id: rule.id, name: rule.name, action: rule.action };
+  // Shadow mode: record what a rule would have caught, and change nothing.
+  if (evaluation.shadow.length > 0) {
+    stored.payload.shadow = evaluation.shadow.map((r) => ({ id: r.id, name: r.name, action: r.action }));
+  }
+
   const ids = await deps.db.transaction(async (tx) => {
     const sessionId = await repo.upsertSession(tx, {
       teamId: auth.teamId,
@@ -116,7 +145,8 @@ export async function ingestHookEvent<E extends IngestedHookEvent>(
     });
     // Team Radio: the heads-up is decided before the event is saved, so the event records that it carried one.
     let about: TeamRadio['about'] = [];
-    if (event === 'PreToolUse' && stored.target && repoName && radioTools.includes(stored.toolName ?? '')) {
+    // A blocked call never touches the file, so it needs no heads-up.
+    if (event === 'PreToolUse' && decision !== 'deny' && stored.target && repoName && radioTools.includes(stored.toolName ?? '')) {
       about = await findTeamRadio(tx, { teamId: auth.teamId, userId: auth.userId, sessionId, repoName, target: stored.target, now });
       if (about.length > 0) stored.payload.radio = { about: about.map((d) => ({ userId: d.userId, name: radioName(d) })) };
     }
@@ -153,12 +183,13 @@ export async function ingestHookEvent<E extends IngestedHookEvent>(
   });
 
   // An edit may raise or extend a yellow flag on that file.
-  if (event === 'PreToolUse' && stored.target && session?.repoName && editTools.includes(stored.toolName ?? '')) {
+  if (event === 'PreToolUse' && decision !== 'deny' && stored.target && session?.repoName && editTools.includes(stored.toolName ?? '')) {
     const [flag] = await findYellowFlags(deps.db, auth.teamId, now, { repoName: session.repoName, target: stored.target });
     if (flag) deps.bus.publish(auth.teamId, { type: 'flag', flag });
   }
 
-  if (ids.about.length === 0 || !stored.target || !repoName) return {};
+  const permission = rule ? { decision: rule.action === 'block' ? ('deny' as const) : ('ask' as const), reason: ruleReason(rule) } : undefined;
+  if (ids.about.length === 0 || !stored.target || !repoName) return { permission };
   deps.bus.publish(auth.teamId, {
     type: 'radio',
     radio: {
@@ -170,5 +201,5 @@ export async function ingestHookEvent<E extends IngestedHookEvent>(
       createdAt: now.toISOString(),
     },
   });
-  return { additionalContext: radioMessage(ids.about, stored.target, now) };
+  return { permission, additionalContext: radioMessage(ids.about, stored.target, now) };
 }

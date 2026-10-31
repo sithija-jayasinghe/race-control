@@ -13,6 +13,7 @@ import { hookRoutes } from './modules/hooks/routes.ts';
 import { liveRoutes } from './modules/sessions/live.ts';
 import { sessionRoutes } from './modules/sessions/routes.ts';
 import { inviteRoutes } from './modules/invites/routes.ts';
+import { RuleCache } from './modules/rules/cache.ts';
 import { teamRoutes } from './modules/teams/routes.ts';
 import { tokenRoutes } from './modules/tokens/routes.ts';
 import { registerAuth } from './plugins/auth.ts';
@@ -32,9 +33,11 @@ export type AppDeps = {
   now: () => Date;
   /** Live messages for each team's dashboards. */
   bus: TeamBus;
+  /** Each team's enabled rules, for the hook endpoint. */
+  rules: RuleCache;
 };
 
-export type BuildAppOptions = Omit<AppDeps, 'now' | 'bus'> & {
+export type BuildAppOptions = Omit<AppDeps, 'now' | 'bus' | 'rules'> & {
   now?: () => Date;
   bus?: TeamBus;
   logger?: FastifyServerOptions['logger'];
@@ -46,7 +49,7 @@ export async function buildApp({
   bus = new TeamBus(),
   ...rest
 }: BuildAppOptions): Promise<FastifyInstance> {
-  const deps: AppDeps = { ...rest, now, bus };
+  const deps: AppDeps = { ...rest, now, bus, rules: new RuleCache(now) };
   const app = Fastify({
     logger: logger ?? { redact: ['req.headers.authorization', 'req.headers.cookie'] },
   });
