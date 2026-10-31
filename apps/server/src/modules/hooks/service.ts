@@ -1,7 +1,15 @@
-import { EDIT_TOOLS, type HookPayload, type IngestedHookEvent, type SessionStatus } from '@race-control/shared';
+import {
+  EDIT_TOOLS,
+  TEAM_RADIO_TOOLS,
+  type HookPayload,
+  type IngestedHookEvent,
+  type SessionStatus,
+  type TeamRadio,
+} from '@race-control/shared';
 import type { AppDeps } from '../../app.ts';
 import { errorHeadline, hideHome, recordToolCall, redactSecrets, repoNameFromCwd } from '../../lib/redact.ts';
 import { findYellowFlags } from '../flags/repo.ts';
+import { findTeamRadio, radioMessage, radioName } from '../radio/service.ts';
 import { findSessionView, serializeSession } from '../sessions/repo.ts';
 import type { DevTokenAuth } from '../tokens/service.ts';
 import * as repo from './repo.ts';
@@ -74,15 +82,25 @@ function compact(value: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(Object.entries(value).filter(([, v]) => v !== undefined));
 }
 
-/** Records one hook event for the token's team and developer. */
+const editTools: readonly string[] = EDIT_TOOLS;
+const radioTools: readonly string[] = TEAM_RADIO_TOOLS;
+
+/** What the hook replies with, beyond "no decision". */
+export type HookOutcome = { additionalContext?: string };
+
+/**
+ * Records one hook event for the token's team and developer. Returns a Team Radio heads-up for the agent
+ * when someone else on the team recently edited the file it's about to work on.
+ */
 export async function ingestHookEvent<E extends IngestedHookEvent>(
   deps: Pick<AppDeps, 'db' | 'now' | 'bus'>,
   auth: DevTokenAuth,
   event: E,
   payload: HookPayload<E>,
-): Promise<void> {
+): Promise<HookOutcome> {
   const now = deps.now();
   const stored = toStoredEvent(event, payload);
+  const repoName = repoNameFromCwd(payload.cwd);
 
   const decision = 'none' as const;
   const ids = await deps.db.transaction(async (tx) => {
@@ -91,11 +109,17 @@ export async function ingestHookEvent<E extends IngestedHookEvent>(
       userId: auth.userId,
       agentSessionId: payload.session_id,
       cwd: payload.cwd ? hideHome(payload.cwd).slice(0, 1000) : null,
-      repoName: repoNameFromCwd(payload.cwd),
+      repoName,
       status: SESSION_STATUS[event],
       ended: event === 'SessionEnd',
       now,
     });
+    // Team Radio: the heads-up is decided before the event is saved, so the event records that it carried one.
+    let about: TeamRadio['about'] = [];
+    if (event === 'PreToolUse' && stored.target && repoName && radioTools.includes(stored.toolName ?? '')) {
+      about = await findTeamRadio(tx, { teamId: auth.teamId, userId: auth.userId, sessionId, repoName, target: stored.target, now });
+      if (about.length > 0) stored.payload.radio = { about: about.map((d) => ({ userId: d.userId, name: radioName(d) })) };
+    }
     const eventId = await repo.insertEvent(tx, {
       teamId: auth.teamId,
       sessionId,
@@ -108,7 +132,7 @@ export async function ingestHookEvent<E extends IngestedHookEvent>(
       decision,
       createdAt: now,
     });
-    return { sessionId, eventId };
+    return { sessionId, eventId, about };
   });
 
   // Tell the team's dashboards, after the data is saved. Only redacted metadata goes out.
@@ -129,9 +153,22 @@ export async function ingestHookEvent<E extends IngestedHookEvent>(
   });
 
   // An edit may raise or extend a yellow flag on that file.
-  const editTools: readonly string[] = EDIT_TOOLS;
   if (event === 'PreToolUse' && stored.target && session?.repoName && editTools.includes(stored.toolName ?? '')) {
     const [flag] = await findYellowFlags(deps.db, auth.teamId, now, { repoName: session.repoName, target: stored.target });
     if (flag) deps.bus.publish(auth.teamId, { type: 'flag', flag });
   }
+
+  if (ids.about.length === 0 || !stored.target || !repoName) return {};
+  deps.bus.publish(auth.teamId, {
+    type: 'radio',
+    radio: {
+      eventId: ids.eventId,
+      sessionId: ids.sessionId,
+      repoName,
+      target: stored.target,
+      about: ids.about,
+      createdAt: now.toISOString(),
+    },
+  });
+  return { additionalContext: radioMessage(ids.about, stored.target, now) };
 }

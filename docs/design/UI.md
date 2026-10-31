@@ -51,6 +51,7 @@ Each status always has a word as well as a colour, so it never relies on colour 
 - Plus each person's latest idle session, for 10 minutes, only if they have nothing working. Finished sessions don't crowd the tower.
 - **Laps** are tool calls. **Sectors** are the last three outcomes: purple = tests passed, green = clean, red = failed or blocked.
 - **Yellow flag:** two people edited the same file in the same repo within 30 minutes (reads don't count; one person's sessions never flag each other). The server decides; the Pit wall shows a Race Control banner per file (newest first, at most three, then "+n more"), turns those working drivers yellow, and the timeline tags the edit. A dismissed banner returns when someone new joins the overlap. Banners only show while cars are on track.
+- **Team Radio:** when the server sends an agent a heads-up, the Pit wall shows a Team Radio card from Race Control to that driver ("TEAM RADIO RC → KAS", "Nimal edited src/auth/session.ts 2 min ago") for 15 seconds, latest only. The timeline tags the step that heard it, with who it was about.
 - On phones the map is hidden; the tower and the session list remain.
 
 ## Layout

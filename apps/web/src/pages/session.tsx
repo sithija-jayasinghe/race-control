@@ -20,6 +20,7 @@ import { Panel } from '@/components/panel';
 import { StatusFlag } from '@/components/status-flag';
 import { activeFlags, useFlags } from '@/lib/flags';
 import { eventsKey } from '@/lib/live';
+import { radioNames, useTeamRadio } from '@/lib/radio';
 import { sessionsKey, useSessionTimeline } from '@/lib/sessions';
 import { cn } from '@/lib/utils';
 import { duration } from '@/pages/sessions';
@@ -54,11 +55,11 @@ export function timelineSteps(events: TimelineEvent[]): TimelineEvent[] {
 /** Adds steps that arrived on the live channel since the timeline was loaded. */
 export function mergeLive(fetched: TimelineEvent[], live: LiveEvent[], sessionId: string): TimelineEvent[] {
   const known = new Set(fetched.map((e) => e.id));
-  const newer = live.filter((e) => e.sessionId === sessionId && !known.has(e.id)).map((e) => ({ ...e, detail: null }));
+  const newer = live.filter((e) => e.sessionId === sessionId && !known.has(e.id)).map((e) => ({ ...e, detail: null, radio: null }));
   return [...fetched, ...newer].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 }
 
-function Step({ event, flagged }: { event: TimelineEvent; flagged: boolean }) {
+function Step({ event, flagged, radio }: { event: TimelineEvent; flagged: boolean; radio: string[] | null }) {
   let Icon: LucideIcon = TOOL_ICONS[event.toolName ?? ''] ?? Wrench;
   let label = event.summary ?? event.type;
   let tone = '';
@@ -90,8 +91,14 @@ function Step({ event, flagged }: { event: TimelineEvent; flagged: boolean }) {
         <span className={cn('block truncate font-mono text-xs', tone)}>
           {label}
           {flagged && <span className="broadcast ml-2 rounded bg-flag-yellow px-1 text-[10px] text-[#0b0c0f]">Yellow flag</span>}
+          {radio && <span className="broadcast ml-2 rounded bg-f1 px-1 text-[10px] text-white">Team radio</span>}
         </span>
         {event.detail && <span className="block truncate font-mono text-[11px] text-muted-foreground">{event.detail}</span>}
+        {radio && (
+          <span className="block truncate font-mono text-[11px] text-muted-foreground">
+            Heads-up: {radioNames(radio)} edited this file recently
+          </span>
+        )}
       </span>
     </li>
   );
@@ -132,6 +139,13 @@ export function SessionPage() {
   );
 
   const flags = useFlags(team.id).data ?? [];
+  // Heads-ups that arrived live, for steps loaded before the timeline re-fetches.
+  const liveRadio = useTeamRadio(team.id);
+  const radioFor = (e: TimelineEvent) => {
+    if (e.radio) return e.radio;
+    const heard = liveRadio.find((r) => r.eventId === e.id);
+    return heard ? heard.about.map((d) => d.userName ?? d.userEmail.split('@')[0]!) : null;
+  };
 
   const session = liveSession ?? timeline.data?.session;
   // Edits to a file this session shares with another one right now.
@@ -174,7 +188,7 @@ export function SessionPage() {
               )}
               <ol aria-label="Timeline" className="py-2">
                 {events.map((event) => (
-                  <Step key={event.id} event={event} flagged={isFlagged(event)} />
+                  <Step key={event.id} event={event} flagged={isFlagged(event)} radio={radioFor(event)} />
                 ))}
               </ol>
             </Panel>

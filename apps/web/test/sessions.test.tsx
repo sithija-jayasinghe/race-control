@@ -7,7 +7,7 @@ import { duration } from '../src/pages/sessions.tsx';
 import { TEAM, TEAMMATE, agentSession, fakeServer, liveEvent, renderApp } from './helpers.tsx';
 import { FakeWebSocket } from './setup.ts';
 
-const step = (overrides: Partial<TimelineEvent> = {}): TimelineEvent => ({ ...liveEvent(overrides), detail: null, ...overrides });
+const step = (overrides: Partial<TimelineEvent> = {}): TimelineEvent => ({ ...liveEvent(overrides), detail: null, radio: null, ...overrides });
 
 describe('Sessions page', () => {
   it('lists sessions and filters them by status', async () => {

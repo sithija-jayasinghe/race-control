@@ -66,17 +66,42 @@ export const yellowFlagSchema = z.object({
 });
 export type YellowFlag = z.infer<typeof yellowFlagSchema>;
 
+/**
+ * Tools that get a Team Radio heads-up about someone else's recent edit. Reads count: Claude Code reads a
+ * file before editing it, and a heads-up arrives with the tool's result, so the read is where it helps.
+ */
+export const TEAM_RADIO_TOOLS = [...EDIT_TOOLS, 'Read'] as const;
+
+/** Race Control told an agent that other people recently edited the file it's working on. */
+export const teamRadioSchema = z.object({
+  /** The tool call that carried the heads-up. */
+  eventId: z.uuid(),
+  /** The session that heard it. */
+  sessionId: z.uuid(),
+  repoName: z.string(),
+  target: z.string(),
+  /** Who edited the file, most recent first. */
+  about: z.array(flagDriverSchema).min(1),
+  createdAt: z.iso.datetime(),
+});
+export type TeamRadio = z.infer<typeof teamRadioSchema>;
+
 /** Messages on a team's live channel (`/teams/:teamId/live`). */
 export const liveMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('hello'), teamId: z.uuid() }),
   z.object({ type: z.literal('session'), session: agentSessionSchema }),
   z.object({ type: z.literal('event'), event: liveEventSchema }),
   z.object({ type: z.literal('flag'), flag: yellowFlagSchema }),
+  z.object({ type: z.literal('radio'), radio: teamRadioSchema }),
 ]);
 export type LiveMessage = z.infer<typeof liveMessageSchema>;
 
 /** A timeline step: an event plus one short, already-redacted detail (an error's first line, a session's end reason). */
-export const timelineEventSchema = liveEventSchema.extend({ detail: z.string().nullable() });
+export const timelineEventSchema = liveEventSchema.extend({
+  detail: z.string().nullable(),
+  /** Names of the people a Team Radio heads-up on this step was about, if it carried one. */
+  radio: z.array(z.string()).nullable(),
+});
 export type TimelineEvent = z.infer<typeof timelineEventSchema>;
 
 export const sessionParamsSchema = z.object({ teamId: z.uuid(), sessionId: z.uuid() });

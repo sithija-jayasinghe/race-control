@@ -1,4 +1,4 @@
-import type { AgentSession, LiveEvent, YellowFlag } from '@race-control/shared';
+import type { AgentSession, LiveEvent, TeamRadio, YellowFlag } from '@race-control/shared';
 import { Check, Lock } from 'lucide-react';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router';
@@ -13,6 +13,7 @@ import { TeamRadioCard } from '@/components/team-radio-card';
 import { TimingTower, type Driver } from '@/components/timing-tower';
 import { TrackMap } from '@/components/track-map';
 import { activeFlags, overlapKey, useFlags } from '@/lib/flags';
+import { RADIO_SHOW_MS, radioQuote, useTeamRadio } from '@/lib/radio';
 import { useSessions, useTeamEvents } from '@/lib/sessions';
 import { buildTrackModel, driverCodes, type TrackDriver, type TrackModel } from '@/lib/track-model';
 import { timeAgo } from '@/lib/time';
@@ -291,6 +292,31 @@ function FlagBanners({ flags, drivers }: { flags: YellowFlag[]; drivers: TrackDr
   );
 }
 
+/** The latest Team Radio heads-up, from Race Control to the agent that heard it, for a few seconds. */
+function RadioMessage({ radio, drivers, sessions }: { radio: TeamRadio | undefined; drivers: TrackDriver[]; sessions: AgentSession[] }) {
+  const [, setExpired] = useState<string>();
+  useEffect(() => {
+    if (!radio) return;
+    // Re-render when it's due to go; the check below decides.
+    const id = setTimeout(() => setExpired(radio.eventId), Math.max(0, Date.parse(radio.createdAt) + RADIO_SHOW_MS - Date.now()));
+    return () => clearTimeout(id);
+  }, [radio]);
+  if (!radio || Date.parse(radio.createdAt) + RADIO_SHOW_MS <= Date.now()) return null;
+
+  const listener = sessions.find((s) => s.id === radio.sessionId);
+  const to =
+    drivers.find((d) => d.sessionId === radio.sessionId)?.code ??
+    (listener ? driverCodes([listener.userName ?? listener.userEmail])[0]! : 'Agent');
+  return (
+    <TeamRadioCard
+      from="RC"
+      to={to}
+      quote={radioQuote(radio)}
+      className="fixed inset-x-3 bottom-20 z-20 mx-auto max-w-[360px] md:bottom-6"
+    />
+  );
+}
+
 function LiveTrack({
   model,
   events,
@@ -306,6 +332,7 @@ function LiveTrack({
   const [selectedId, setSelectedId] = useState<string>();
   const selected = model.drivers.find((d) => d.id === selectedId);
   const connected = sessions.some((s) => s.userId === me.user.id);
+  const [radio] = useTeamRadio(team.id);
 
   return (
     <div data-track-pass-through="" className="flex min-h-[calc(100dvh-7rem)] flex-col gap-4 md:flex-row md:items-start md:justify-between">
@@ -331,6 +358,7 @@ function LiveTrack({
         <SessionsPanel sessions={sessions.filter((s) => s.status !== 'ended')} title="On track" />
       </div>
       <TrackMap model={model} selectedId={selectedId} onSelect={setSelectedId} />
+      <RadioMessage radio={radio} drivers={model.drivers} sessions={sessions} />
     </div>
   );
 }

@@ -1,7 +1,15 @@
-import { liveMessageSchema, type AgentSession, type LiveEvent, type LiveMessage, type YellowFlag } from '@race-control/shared';
+import {
+  liveMessageSchema,
+  type AgentSession,
+  type LiveEvent,
+  type LiveMessage,
+  type TeamRadio,
+  type YellowFlag,
+} from '@race-control/shared';
 import { useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { flagsKey, upsertFlag } from '@/lib/flags';
+import { addRadio, radioKey } from '@/lib/radio';
 import { sessionsKey } from '@/lib/sessions';
 
 export type LiveStatus = 'connecting' | 'live' | 'offline';
@@ -18,7 +26,7 @@ function liveUrl(teamId: string): string {
   return `${scheme}://${window.location.host}/api/teams/${teamId}/live`;
 }
 
-/** Folds one live message into the cached sessions, feed and flags. */
+/** Folds one live message into the cached sessions, feed, flags and Team Radio. */
 export function applyLiveMessage(queryClient: QueryClient, teamId: string, message: LiveMessage) {
   if (message.type === 'session') {
     queryClient.setQueryData<AgentSession[]>(sessionsKey(teamId), (old = []) =>
@@ -30,6 +38,8 @@ export function applyLiveMessage(queryClient: QueryClient, teamId: string, messa
     queryClient.setQueryData<LiveEvent[]>(eventsKey(teamId), (old = []) => [...old, message.event].slice(-MAX_EVENTS));
   } else if (message.type === 'flag') {
     queryClient.setQueryData<YellowFlag[]>(flagsKey(teamId), (old = []) => upsertFlag(old, message.flag));
+  } else if (message.type === 'radio') {
+    queryClient.setQueryData<TeamRadio[]>(radioKey(teamId), (old = []) => addRadio(old, message.radio));
   }
 }
 

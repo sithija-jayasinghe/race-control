@@ -8,7 +8,7 @@ export const YELLOW_FLAG_WINDOW_MS = 30 * 60 * 1000;
 /** Safety cap on the edits read per check; a team won't come near it within one window. */
 const MAX_EDITS = 5000;
 
-type Edit = {
+export type Edit = {
   sessionId: string;
   userId: string;
   userEmail: string;
@@ -18,6 +18,18 @@ type Edit = {
   target: string | null;
   createdAt: Date;
 };
+
+/** One person's latest edit, as flags and Team Radio describe them. */
+export function toDriver(edit: Edit): YellowFlag['drivers'][number] {
+  return {
+    sessionId: edit.sessionId,
+    userId: edit.userId,
+    userEmail: edit.userEmail,
+    userName: edit.userName,
+    agent: edit.agent,
+    lastAt: edit.createdAt.toISOString(),
+  };
+}
 
 /**
  * Groups edits by repo and file, and keeps the files that two or more people edited. Each person
@@ -45,14 +57,7 @@ export function flagsFromEdits(edits: Edit[], windowMs = YELLOW_FLAG_WINDOW_MS):
       id,
       repoName: file.repoName,
       target: file.target,
-      drivers: drivers.map((d) => ({
-        sessionId: d.sessionId,
-        userId: d.userId,
-        userEmail: d.userEmail,
-        userName: d.userName,
-        agent: d.agent,
-        lastAt: d.createdAt.toISOString(),
-      })),
+      drivers: drivers.map(toDriver),
       expiresAt: expiresAt.toISOString(),
     });
   }
@@ -60,17 +65,17 @@ export function flagsFromEdits(edits: Edit[], windowMs = YELLOW_FLAG_WINDOW_MS):
 }
 
 /**
- * A team's current yellow flags, newest first. Pass `file` to check just one file (after an edit).
- * Built only from stored metadata: who, which file, when.
+ * A team's edits inside the flag window, optionally to one file. Built only from stored metadata:
+ * who, which file, when.
  */
-export async function findYellowFlags(
+export async function recentEdits(
   db: DbOrTx,
   teamId: string,
   now: Date,
   file?: { repoName: string; target: string },
-): Promise<YellowFlag[]> {
+): Promise<Edit[]> {
   const since = new Date(now.getTime() - YELLOW_FLAG_WINDOW_MS);
-  const edits = await db
+  return db
     .select({
       sessionId: events.sessionId,
       userId: sessions.userId,
@@ -97,5 +102,14 @@ export async function findYellowFlags(
       ),
     )
     .limit(MAX_EDITS);
-  return flagsFromEdits(edits);
+}
+
+/** A team's current yellow flags, newest first. Pass `file` to check just one file (after an edit). */
+export async function findYellowFlags(
+  db: DbOrTx,
+  teamId: string,
+  now: Date,
+  file?: { repoName: string; target: string },
+): Promise<YellowFlag[]> {
+  return flagsFromEdits(await recentEdits(db, teamId, now, file));
 }

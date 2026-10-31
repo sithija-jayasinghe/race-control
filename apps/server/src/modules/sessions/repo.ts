@@ -89,6 +89,13 @@ function detailFrom(type: string, payload: unknown): string | null {
   return null;
 }
 
+/** Who a Team Radio heads-up on this step was about, from the names stored with it. */
+function radioFrom(payload: unknown): string[] | null {
+  const radio = ((payload ?? {}) as { radio?: { about?: Array<{ name?: unknown }> } }).radio;
+  if (!radio || !Array.isArray(radio.about)) return null;
+  return radio.about.map((p) => p.name).filter((name): name is string => typeof name === 'string');
+}
+
 /** One session's events, oldest first: the latest `limit`, and whether older ones were left out. */
 export async function listSessionEvents(db: DbOrTx, teamId: string, sessionId: string, limit: number) {
   const rows = await db
@@ -111,6 +118,6 @@ export async function listSessionEvents(db: DbOrTx, teamId: string, sessionId: s
   const kept = rows.slice(0, limit).reverse();
   return {
     truncated,
-    events: kept.map(({ payload, ...e }) => ({ ...e, createdAt: e.createdAt.toISOString(), detail: detailFrom(e.type, payload) })),
+    events: kept.map(({ payload, ...e }) => ({ ...e, createdAt: e.createdAt.toISOString(), detail: detailFrom(e.type, payload), radio: radioFrom(payload) })),
   };
 }

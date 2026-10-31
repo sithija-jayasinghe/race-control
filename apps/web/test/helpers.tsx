@@ -143,7 +143,7 @@ export function fakeServer(options: { signedIn?: boolean; teams?: MeResponse['te
         const session = (state.sessions.get(teamId!) ?? []).find((s) => s.id === sessionId);
         if (!session) return fail(404, 'not_found');
         const events = (state.events.get(teamId!) ?? []).filter((e) => e.sessionId === sessionId);
-        return ok({ session, events: events.map((e) => ({ detail: null, ...e })), truncated: false });
+        return ok({ session, events: events.map((e) => ({ detail: null, radio: null, ...e })), truncated: false });
       },
     ],
     ['GET', /^\/setup\/hooks$/, () => ok({ hooksUrl: 'http://api.test/hooks' })],
