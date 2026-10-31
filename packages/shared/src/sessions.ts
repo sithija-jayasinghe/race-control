@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { approvalSchema } from './approvals.ts';
 import { agentSchema, eventDecisionSchema, sessionStatusSchema } from './enums.ts';
 
 /** An agent session as listed to team members. */
@@ -93,6 +94,8 @@ export const liveMessageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('event'), event: liveEventSchema }),
   z.object({ type: z.literal('flag'), flag: yellowFlagSchema }),
   z.object({ type: z.literal('radio'), radio: teamRadioSchema }),
+  /** An approval was requested, decided or expired. */
+  z.object({ type: z.literal('approval'), approval: approvalSchema }),
 ]);
 export type LiveMessage = z.infer<typeof liveMessageSchema>;
 

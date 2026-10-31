@@ -2,6 +2,7 @@ import { buildApp } from './app.ts';
 import { createDb } from './db/client.ts';
 import { loadEnv } from './env.ts';
 import { createConsoleMailer } from './lib/mailer.ts';
+import { expireAllPending } from './modules/approvals/repo.ts';
 
 const env = loadEnv();
 if (env.NODE_ENV === 'production') {
@@ -10,6 +11,8 @@ if (env.NODE_ENV === 'production') {
 }
 
 const { db, close } = createDb(env.DATABASE_URL);
+// A restart drops every held hook request, so approvals still pending can never be answered.
+await expireAllPending(db, new Date());
 const app = await buildApp({
   db,
   mailer: createConsoleMailer(),

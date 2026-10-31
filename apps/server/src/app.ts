@@ -1,18 +1,23 @@
 import cookie from '@fastify/cookie';
 import websocket from '@fastify/websocket';
 import rateLimit from '@fastify/rate-limit';
+import { APPROVAL_WAIT_MS } from '@race-control/shared';
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastify';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import type { Database } from './db/client.ts';
 import { registerErrorHandler } from './lib/errors.ts';
 import { TeamBus } from './lib/team-bus.ts';
 import type { Mailer } from './lib/mailer.ts';
+import { ApprovalHub } from './modules/approvals/hub.ts';
+import { approvalRoutes } from './modules/approvals/routes.ts';
 import { authRoutes } from './modules/auth/routes.ts';
 import { flagRoutes } from './modules/flags/routes.ts';
 import { hookRoutes } from './modules/hooks/routes.ts';
 import { liveRoutes } from './modules/sessions/live.ts';
 import { sessionRoutes } from './modules/sessions/routes.ts';
 import { inviteRoutes } from './modules/invites/routes.ts';
+import { RuleCache } from './modules/rules/cache.ts';
+import { ruleRoutes } from './modules/rules/routes.ts';
 import { teamRoutes } from './modules/teams/routes.ts';
 import { tokenRoutes } from './modules/tokens/routes.ts';
 import { registerAuth } from './plugins/auth.ts';
@@ -32,11 +37,18 @@ export type AppDeps = {
   now: () => Date;
   /** Live messages for each team's dashboards. */
   bus: TeamBus;
+  /** Each team's enabled rules, for the hook endpoint. */
+  rules: RuleCache;
+  /** Hook requests held for a lead's approval. */
+  approvals: ApprovalHub;
+  /** How long a held request waits for a lead. Tests shorten it. */
+  approvalWaitMs: number;
 };
 
-export type BuildAppOptions = Omit<AppDeps, 'now' | 'bus'> & {
+export type BuildAppOptions = Omit<AppDeps, 'now' | 'bus' | 'rules' | 'approvals' | 'approvalWaitMs'> & {
   now?: () => Date;
   bus?: TeamBus;
+  approvalWaitMs?: number;
   logger?: FastifyServerOptions['logger'];
 };
 
@@ -44,9 +56,10 @@ export async function buildApp({
   logger,
   now = () => new Date(),
   bus = new TeamBus(),
+  approvalWaitMs = APPROVAL_WAIT_MS,
   ...rest
 }: BuildAppOptions): Promise<FastifyInstance> {
-  const deps: AppDeps = { ...rest, now, bus };
+  const deps: AppDeps = { ...rest, now, bus, rules: new RuleCache(now), approvals: new ApprovalHub(), approvalWaitMs };
   const app = Fastify({
     logger: logger ?? { redact: ['req.headers.authorization', 'req.headers.cookie'] },
   });
@@ -70,6 +83,8 @@ export async function buildApp({
   hookRoutes(app, deps);
   sessionRoutes(app, deps);
   flagRoutes(app, deps);
+  ruleRoutes(app, deps);
+  approvalRoutes(app, deps);
   liveRoutes(app, deps);
 
   return app;

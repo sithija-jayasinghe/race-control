@@ -42,7 +42,7 @@ Each status always has a word as well as a colour, so it never relies on colour 
 | **Team Radio card** | Waveform, "TEAM RADIO NIM → KAS" and the heads-up as a quote |
 | **LIVE clock** | Red LIVE tag and elapsed session time |
 | **Counters** | Glowing dots and numbers for each status in the top bar, with the words for screen readers |
-| **Approval card** | Blue kerb stripe, who wants to do what, a countdown to auto-deny, Deny and Approve (Week 4) |
+| **Approval card** | Blue kerb stripe, who wants to do what, a countdown to auto-deny, Deny and Approve |
 | **Command palette** | ⌘K to jump to any agent, file or rule (added when there is something to jump to) |
 
 ## Who's on the track
@@ -53,6 +53,21 @@ Each status always has a word as well as a colour, so it never relies on colour 
 - **Yellow flag:** two people edited the same file in the same repo within 30 minutes (reads don't count; one person's sessions never flag each other). The server decides; the Pit wall shows a Race Control banner per file (newest first, at most three, then "+n more"), turns those working drivers yellow, and the timeline tags the edit. A dismissed banner returns when someone new joins the overlap. Banners only show while cars are on track.
 - **Team Radio:** when the server sends an agent a heads-up, the Pit wall shows a Team Radio card from Race Control to that driver ("TEAM RADIO RC → KAS", "Nimal edited src/auth/session.ts 2 min ago") for 15 seconds, latest only. The timeline tags the step that heard it, with who it was about.
 - On phones the map is hidden; the tower and the session list remain.
+
+## Rules page
+
+- **Test lane** at the top: type a file path or a command (anything with a space) and the server says what would happen: "● Stopped by …", "● Pit lane: … needs a lead" or "Goes through", plus the shadow rules it would trip. Matching rows light up with a red or blue edge.
+- **Rows:** a tower-style tag, **STOP** (block, red) or **PIT** (needs a lead, blue), then the name and the tools and pattern in mono. Shadow rules are ghosts: dashed tag, dimmed name. A rule that's off is struck through. Seven small bars show how often it matched each day for the last week (hidden on phones), then a **Shadow / Live** switch and an on/off switch. On phones the controls take a second line.
+- **Drawer** (leads): kerb stripe, the name typed as a heading, **Stop / Pit**, tool chips (Edit, Write, Bash, Any), the pattern, and a live "would have caught n in the last 7 days" with real, redacted examples. New rules are saved with **Add in shadow**; clicking a rule's name edits it in the same drawer.
+- Rules are turned off, never deleted. Developers see everything without the controls. A team with no rules offers its lead the five starter rules.
+- The spec and code say `enforce`; the page says **Live**.
+
+## Approvals
+
+- **Pit lane card** on the Pit wall, bottom left (full width above the tab bar on phones): blue kerb, "PIT LANE" and a countdown to auto-deny, "**Amaya** wants to write", the file or command in mono, the rule and repo, a draining blue bar, then **Deny** and **Approve**. It shows the oldest waiting approval, with "+n waiting" linking to the queue. After an answer the card says what happened for a moment ("Approved. Amaya's agent carries on."). Developers see "Waiting for a lead" instead of the buttons. While it shows, the Team Radio card steps aside on screens narrower than 1280 px.
+- **Approvals page** (`/approvals`): the pit lane (waiting, with a clock and the buttons on each row), then "Last 24 hours" as **GO** (approved), **STOP** (denied) and **OUT** (no answer), with who answered and when. Answered rows open the session's timeline.
+- **Phone screen** (`/approvals/:id`, from the card's "Pit lane" link or a queue row): the clock big, the target unclipped, and **Approve** above **Deny** in thumb reach.
+- The nav item has a blue badge with the number waiting.
 
 ## Layout
 
@@ -73,7 +88,7 @@ Desktop                                              Phone
 
 - **Desktop:** a thin floating icon rail with tooltips; a top bar with the wordmark, team, counters, LIVE clock and theme menu.
 - **Phone:** the same top bar without counters; a floating glass tab bar with icons; the tower goes full width above the scene.
-- Navigation: Pit wall, Sessions, Team, Settings. Items for later weeks (Approvals, Rules) appear only once they're built. Everything team-specific lives under `/t/:teamId/...`.
+- Navigation: Pit wall, Approvals (with a badge for waiting approvals), Sessions, Rules, Team, Settings. Everything team-specific lives under `/t/:teamId/...`.
 - Every screen works from 360 px wide, with no horizontal scrolling and tap targets of at least 44 px.
 
 ## Building blocks

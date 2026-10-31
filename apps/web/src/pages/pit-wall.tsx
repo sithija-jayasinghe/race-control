@@ -1,8 +1,9 @@
-import type { AgentSession, LiveEvent, TeamRadio, YellowFlag } from '@race-control/shared';
+import type { AgentSession, Approval, LiveEvent, TeamRadio, YellowFlag } from '@race-control/shared';
 import { Check, Lock } from 'lucide-react';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { AppShell } from '@/components/app-shell';
+import { ApprovalCard } from '@/components/approval-card';
 import { LightsOut } from '@/components/lights-out';
 import { LiveBadge } from '@/components/live-badge';
 import { LiveClock } from '@/components/live-clock';
@@ -12,6 +13,7 @@ import { StatusFlag, type FlagStatus } from '@/components/status-flag';
 import { TeamRadioCard } from '@/components/team-radio-card';
 import { TimingTower, type Driver } from '@/components/timing-tower';
 import { TrackMap } from '@/components/track-map';
+import { useApprovals, waitingApprovals } from '@/lib/approvals';
 import { activeFlags, overlapKey, useFlags } from '@/lib/flags';
 import { RADIO_SHOW_MS, radioQuote, useTeamRadio } from '@/lib/radio';
 import { useSessions, useTeamEvents } from '@/lib/sessions';
@@ -293,7 +295,17 @@ function FlagBanners({ flags, drivers }: { flags: YellowFlag[]; drivers: TrackDr
 }
 
 /** The latest Team Radio heads-up, from Race Control to the agent that heard it, for a few seconds. */
-function RadioMessage({ radio, drivers, sessions }: { radio: TeamRadio | undefined; drivers: TrackDriver[]; sessions: AgentSession[] }) {
+function RadioMessage({
+  radio,
+  drivers,
+  sessions,
+  className,
+}: {
+  radio: TeamRadio | undefined;
+  drivers: TrackDriver[];
+  sessions: AgentSession[];
+  className?: string;
+}) {
   const [, setExpired] = useState<string>();
   useEffect(() => {
     if (!radio) return;
@@ -312,7 +324,37 @@ function RadioMessage({ radio, drivers, sessions }: { radio: TeamRadio | undefin
       from="RC"
       to={to}
       quote={radioQuote(radio)}
-      className="fixed inset-x-3 bottom-20 z-20 mx-auto max-w-[360px] md:bottom-6"
+      className={cn('fixed inset-x-3 bottom-20 z-20 mx-auto max-w-[360px] md:bottom-6', className)}
+    />
+  );
+}
+
+/** The oldest waiting approval, bottom left. A decided one stays a moment, so the lead sees it land. */
+function PitLane({ approvals, teamId, canDecide }: { approvals: Approval[]; teamId: string; canDecide: boolean }) {
+  const waiting = waitingApprovals(approvals);
+  const current = waiting[0];
+  const currentId = current?.id;
+  const [lastId, setLastId] = useState<string>();
+  useEffect(() => {
+    if (currentId) setLastId(currentId);
+  }, [currentId]);
+  const justSettled = !current && lastId ? approvals.find((a) => a.id === lastId && a.status !== 'pending') : undefined;
+  useEffect(() => {
+    if (!justSettled) return;
+    const id = setTimeout(() => setLastId(undefined), 3000);
+    return () => clearTimeout(id);
+  }, [justSettled]);
+
+  const shown = current ?? justSettled;
+  if (!shown) return null;
+  return (
+    <ApprovalCard
+      key={shown.id}
+      approval={shown}
+      teamId={teamId}
+      canDecide={canDecide}
+      moreWaiting={Math.max(0, waiting.length - 1)}
+      className="fixed inset-x-3 bottom-20 z-30 mx-auto max-w-[360px] md:right-auto md:bottom-6 md:left-[84px] md:mx-0 md:w-[340px]"
     />
   );
 }
@@ -322,11 +364,14 @@ function LiveTrack({
   events,
   sessions,
   flags,
+  approvalShown,
 }: {
   model: TrackModel;
   events: LiveEvent[];
   sessions: AgentSession[];
   flags: YellowFlag[];
+  /** The pit lane card takes the bottom of the screen, so Team Radio steps aside on smaller screens. */
+  approvalShown: boolean;
 }) {
   const { me, team } = useTeamContext();
   const [selectedId, setSelectedId] = useState<string>();
@@ -358,7 +403,7 @@ function LiveTrack({
         <SessionsPanel sessions={sessions.filter((s) => s.status !== 'ended')} title="On track" />
       </div>
       <TrackMap model={model} selectedId={selectedId} onSelect={setSelectedId} />
-      <RadioMessage radio={radio} drivers={model.drivers} sessions={sessions} />
+      <RadioMessage radio={radio} drivers={model.drivers} sessions={sessions} className={approvalShown ? 'max-xl:hidden' : undefined} />
     </div>
   );
 }
@@ -380,6 +425,7 @@ export function PitWallPage() {
   const sessions = useSessions(team.id, { poll: live !== 'live' });
   const events = useTeamEvents(team.id);
   const flags = useFlags(team.id, { poll: live !== 'live' });
+  const approvals = useApprovals(team.id, { poll: live !== 'live' });
   const now = useNow();
   const flying = useMemo(() => activeFlags(flags.data ?? [], now), [flags.data, now]);
   const model = useMemo(
@@ -412,10 +458,17 @@ export function PitWallPage() {
             <DemoRace onExit={() => setParams({})} />
           </>
         ) : onTrack ? (
-          <LiveTrack model={model} events={events.data ?? []} sessions={sessions.data ?? []} flags={flying} />
+          <LiveTrack
+            model={model}
+            events={events.data ?? []}
+            sessions={sessions.data ?? []}
+            flags={flying}
+            approvalShown={waitingApprovals(approvals.data ?? []).length > 0}
+          />
         ) : (
           <EmptyTrack sessions={sessions.data ?? []} onDemo={() => setParams({ demo: '1' })} />
         )}
+        {!demo && <PitLane approvals={approvals.data ?? []} teamId={team.id} canDecide={team.role === 'lead'} />}
       </AppShell>
     </>
   );

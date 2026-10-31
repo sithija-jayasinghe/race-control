@@ -108,7 +108,9 @@ The response body uses Claude Code's hook output format:
 - `allow`: run without asking the developer
 - `deny`: block it, and the reason is shown to the agent
 - `ask`: fall back to the developer's normal permission prompt
-- `defer`: also listed in the current docs. Race Control doesn't use it, and its exact meaning should be confirmed before Week 4
+- `defer`: ends the agent's turn so the tool call can be resumed later, and only works in non-interactive (`-p`) runs. Race Control doesn't use it
+- When several hooks decide, `deny` beats `defer`, which beats `ask`, which beats `allow`. The developer's own deny and ask permission rules still apply whatever a hook returns
+- The reason is shown to Claude for `deny`, and in the developer's permission prompt for `ask`
 - An empty `200` response means no decision, and Claude Code's normal permission flow applies
 
 The same `hookSpecificOutput` can carry `additionalContext`, a string added to Claude's context. Team Radio uses it (section 12). It is ignored when `permissionDecision` is `defer`.
@@ -122,8 +124,8 @@ type Rule = {
   id: string;
   teamId: string;
   name: string;                 // "Never touch .env"
-  tool: string;                 // "Bash" | "Edit" | "Write" | "*"
-  pattern: string;              // glob/regex on the command or file path
+  tool: string;                 // "Bash", "Edit|Write" (a list) or "*"
+  pattern: string;              // wildcard pattern on the file path or command (see below)
   action: 'block' | 'approve';  // approve = pause and ask the team lead
   mode: 'enforce' | 'shadow';   // shadow = record "would have matched", never block
   enabled: boolean;
@@ -132,24 +134,45 @@ type Rule = {
 
 Evaluation in the `PreToolUse` handler:
 1. Load the team's enabled rules (cached in memory, invalidated on change)
-2. Build the match target: `tool_input.command` for Bash, `tool_input.file_path` for Edit and Write
+2. Build the match target: the raw `tool_input.command` for Bash (matched in memory, never stored), and the normalised repo-relative path for file tools
 3. Record every matching `shadow` rule on the event, without acting on it
-4. First matching `enforce` rule wins:
+4. Of the matching `enforce` rules, a block always wins over an approval; otherwise the oldest rule wins:
    - `block`: respond `deny` with the rule name as the reason
    - `approve`: create an approval, push it to the lead's dashboard, and **hold the HTTP request open** until the lead decides or the wait expires
 5. No match: respond with an empty `200` (no decision), or with only a Team Radio `additionalContext`
+
+**Patterns** are wildcards, never regular expressions, so no rule can make the hook endpoint hang (they are matched in time proportional to pattern × text):
+
+- File paths: `*` matches within one folder, `**` across folders (`**/` also matches no folder), `?` one character. `**/.env*` matches `.env` and `apps/api/.env.local`. Paths are normalised first, so `src/../.env` is `.env`.
+- Bash: the command is split at `&&`, `||`, `;`, `|` and new lines, and each part must match as a whole. `*` matches anything. `npm publish*` matches `pnpm build && npm publish --access public`, but not `echo "npm publish"`.
+- Everything else is literal. Tool names are case-sensitive.
+
+**Managing rules:** every member sees the team's rules and can try a file or command against them; only leads add, edit, switch modes or turn rules off (never delete). A team has at most 100 rules. A change through the API clears the server's rule cache at once; changes made elsewhere (the simulator) apply within 30 seconds.
 
 New rules start in `shadow` mode, so the lead can see what a rule would catch before it blocks anyone. When a lead approves an action, they can choose "always allow this", which creates a matching rule.
 
 **Approval wait:** keep it below the hook `timeout` (300 s in the snippet). If nobody answers, respond `deny` with "No approval within 4 minutes". This is fail-closed for actions the team flagged as risky.
 
+**How approvals work:**
+
+- The held event is recorded with the decision `pending`, and the approval goes out on the team's live channel straight away, so the Pit wall shows the pit lane card and the agent's driver turns blue (`PIT`).
+- Every member can see approvals; only leads decide. The first answer wins: a second lead, or an answer after the wait ran out, gets `409 already_decided`.
+- Approve answers `allow` ("Approved by a team lead in Race Control (team rule: …)"); deny answers `deny` ("Denied by a team lead …"). The developer's own deny and ask permission rules still apply after an `allow`. Reasons reach the agent, so they never include a person's name.
+- The event is updated to `allow` or `deny`, and the timeline step says who decided ("Approved by Sam, rule: …").
+- If the agent hangs up (the developer pressed Esc, or the hook timed out), the approval expires at once.
+- Held requests live in the server's memory, so approvals still pending when the server starts are expired (and their events denied). Running more than one server instance would need a shared channel (for example Postgres `LISTEN/NOTIFY`) for both held requests and the live channel.
+- The Approvals page shows waiting approvals and the last 24 hours of answers.
+
 **If Race Control is down:** by default, a hook that can't reach the server is a non-blocking error and the agent carries on (fail-open for availability). A team can choose fail-closed instead: the snippet generator adds `"onFailure": "block"` to the `PreToolUse` hook. Default to fail-open, and confirm both behaviours in testing. Document this honestly. Race Control is a team safety net, not a security boundary.
 
-Starter rules to seed every new team:
-- Block: `Edit|Write` on `**/.env*`
-- Block: `Bash` matching `rm -rf /` or `git push --force` to `main`
-- Approve: `Edit|Write` on `**/migrations/**`
-- Approve: `Bash` matching `npm publish`
+Starter rules seeded for every new team, in shadow mode (file edits means `Edit|MultiEdit|Write|NotebookEdit`):
+- Block file edits on `**/.env*`
+- Block `Bash` matching `rm -rf /`
+- Block `Bash` matching `git push*-f*main*` (force push to main)
+- Approve file edits on `**/migrations/**`
+- Approve `Bash` matching `npm publish*`
+
+The simulator's Demo team enforces the `.env` and migration rules, so its race shows a blocked edit and a migration waiting for a lead.
 
 ## 6. Privacy and security
 

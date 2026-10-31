@@ -2,8 +2,8 @@ import type { IngestedHookEvent } from '@race-control/shared';
 import { recordToolCall } from '../lib/redact.ts';
 import { LAP_MS, steps, type Step } from './scenario.ts';
 
-/** The HTTP status, and the Team Radio heads-up the reply carried, if any. */
-export type SendResult = { status: number; radio?: string };
+/** The HTTP status, plus a rule's decision and a Team Radio heads-up if the reply carried them. */
+export type SendResult = { status: number; decision?: string; reason?: string; radio?: string };
 
 /** Sends one hook event the way Claude Code does. */
 export type Send = (event: IngestedHookEvent, token: string, body: Record<string, unknown>) => Promise<SendResult>;
@@ -12,8 +12,14 @@ export type Send = (event: IngestedHookEvent, token: string, body: Record<string
 export function readHookReply(status: number, text: string): SendResult {
   if (!text) return { status };
   try {
-    const context = (JSON.parse(text) as { hookSpecificOutput?: { additionalContext?: unknown } }).hookSpecificOutput?.additionalContext;
-    return typeof context === 'string' ? { status, radio: context } : { status };
+    const output = (JSON.parse(text) as { hookSpecificOutput?: Record<string, unknown> }).hookSpecificOutput ?? {};
+    const pick = (key: string) => (typeof output[key] === 'string' ? output[key] : undefined);
+    return {
+      status,
+      decision: pick('permissionDecision'),
+      reason: pick('permissionDecisionReason'),
+      radio: pick('additionalContext'),
+    };
   } catch {
     return { status };
   }
@@ -48,6 +54,8 @@ type RunOptions = {
   stopped?: () => boolean;
   /** Keeps session ids unique across runs. Defaults to a fresh id. */
   runId?: string;
+  /** A reply slower than this is a request held for a lead: that driver waits, the others race on. */
+  holdAfterMs?: number;
 };
 
 /** One readable line per event. Built from the redacted record, so secrets never reach the console. */
@@ -79,9 +87,25 @@ export async function runRace({
   log = () => {},
   stopped = () => false,
   runId = Date.now().toString(36),
+  holdAfterMs = 1000,
 }: RunOptions): Promise<RaceStats> {
   const latencies: number[] = [];
   let failed = 0;
+  // Drivers waiting in the pit lane, and their steps since, sent in order once a lead answers.
+  const held = new Map<string, Promise<void>>();
+
+  const sendStep = async (step: Step & { sessionId: string; cwd: string }, token: string) => {
+    const body = { session_id: step.sessionId, cwd: step.cwd, hook_event_name: step.event, ...step.body };
+    const started = now();
+    const { status, decision, reason, radio } = await send(step.event, token, body);
+    // A held request's time is the lead's, not the hook's.
+    const took = now() - started;
+    if (took < holdAfterMs) latencies.push(took);
+    if (status !== 200) failed++;
+    log(`${step.driver}  ${describe(step)}${status === 200 ? '' : `  (HTTP ${status})`}`);
+    if (decision) log(`${step.driver}  ${decision === 'allow' ? '🟢' : decision === 'deny' ? '⛔' : '✋'} ${decision}: ${reason ?? ''}`);
+    if (radio) log(`${step.driver}  📻 ${radio}`);
+  };
 
   for (let lap = 1; lap <= laps && !stopped(); lap++) {
     if (laps > 1) log(`— lap ${lap} —`);
@@ -93,17 +117,22 @@ export async function runRace({
 
       const token = tokens.get(step.driver);
       if (!token) throw new Error(`no token for driver ${step.driver}`);
-      const body = { session_id: step.sessionId, cwd: step.cwd, hook_event_name: step.event, ...step.body };
-      const started = now();
-      const { status, radio } = await send(step.event, token, body);
-      latencies.push(now() - started);
-      if (status !== 200) failed++;
-      log(`${step.driver}  ${describe(step)}${status === 200 ? '' : `  (HTTP ${status})`}`);
-      if (radio) log(`${step.driver}  📻 ${radio}`);
+      const waiting = held.get(step.driver);
+      if (waiting) {
+        held.set(step.driver, waiting.then(() => sendStep(step, token)));
+        continue;
+      }
+      const sent = sendStep(step, token);
+      const quick = await Promise.race([sent.then(() => true), new Promise<false>((r) => setTimeout(() => r(false), holdAfterMs))]);
+      if (!quick) {
+        log(`${step.driver}  ✋ waiting for a lead: approve or deny it on the Pit wall`);
+        held.set(step.driver, sent);
+      }
     }
     if (lap < laps && !stopped()) await sleep(Math.max(0, (LAP_MS - (now() - lapStart) * speed) / speed));
   }
 
+  await Promise.all(held.values());
   latencies.sort((a, b) => a - b);
   return { sent: latencies.length, failed, p50Ms: percentile(latencies, 50), p95Ms: percentile(latencies, 95) };
 }

@@ -1,8 +1,9 @@
 import { DEV_TOKEN_PREFIX } from '@race-control/shared';
 import { and, eq, inArray, like, sql } from 'drizzle-orm';
 import type { Database, DbOrTx } from '../db/client.ts';
-import { devTokens, memberships, teams, users } from '../db/schema.ts';
+import { devTokens, memberships, rules, teams, users } from '../db/schema.ts';
 import { createSecureToken, hashToken } from '../lib/secure-token.ts';
+import { seedStarterRules } from '../modules/rules/repo.ts';
 import { DEMO_DOMAIN, DEMO_LEAD, DEMO_TEAM_NAME, DRIVERS } from './scenario.ts';
 
 export class SimulatorSetupError extends Error {}
@@ -45,6 +46,16 @@ export async function setupDemoTeam(db: Database, options: { viewerEmail?: strin
       const [team] = await tx.insert(teams).values({ name: DEMO_TEAM_NAME }).returning({ id: teams.id });
       teamId = team!.id;
       await tx.insert(memberships).values({ teamId, userId: leadId, role: 'lead' });
+    }
+
+    // The starter rules, with the .env and migration rules live, so the race shows a blocked edit and an
+    // approval.
+    if ((await tx.$count(rules, eq(rules.teamId, teamId))) === 0) {
+      await seedStarterRules(tx, teamId, options.now);
+      await tx
+        .update(rules)
+        .set({ mode: 'enforce' })
+        .where(and(eq(rules.teamId, teamId), inArray(rules.pattern, ['**/.env*', '**/migrations/**'])));
     }
 
     if (options.viewerEmail) {

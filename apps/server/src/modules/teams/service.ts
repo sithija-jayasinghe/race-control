@@ -1,12 +1,14 @@
 import type { MyTeam, Role } from '@race-control/shared';
 import type { Database } from '../../db/client.ts';
+import { seedStarterRules } from '../rules/repo.ts';
 import * as repo from './repo.ts';
 
-/** Creates a team with the creator as its first lead. */
-export async function createTeam(db: Database, userId: string, name: string): Promise<MyTeam> {
+/** Creates a team with the creator as its first lead, and the starter rules in shadow mode. */
+export async function createTeam(db: Database, userId: string, name: string, now: Date): Promise<MyTeam> {
   return db.transaction(async (tx) => {
     const team = await repo.insertTeam(tx, name);
     await repo.insertMembership(tx, { teamId: team.id, userId, role: 'lead' });
+    await seedStarterRules(tx, team.id, now);
     return { ...team, role: 'lead' };
   });
 }

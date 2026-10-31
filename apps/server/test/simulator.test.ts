@@ -129,6 +129,12 @@ describe('runRace', () => {
     expect(stored).not.toContain('sk_live_');
     expect(stored).not.toContain('ALTER TABLE');
     expect(lines[0]).toMatch(/^NIM {2}● session start$/);
+    // The Demo team enforces the .env and migration rules: Janith's edit is blocked, and Amaya's migration
+    // waits for a lead, who doesn't answer in this test.
+    expect(lines.filter((l) => l.includes('⛔'))).toEqual([
+      'JAN  ⛔ deny: Blocked by team rule: Never touch .env files',
+      'AMA  ⛔ deny: No approval within 1 second (team rule: Migrations need a lead)',
+    ]);
     // Kasun's agent reads session.ts after Nimal edited it, and hears about it.
     expect(lines.filter((l) => l.includes('📻'))).toEqual([
       "KAS  📻 Race Control (team note): Nimal's Claude Code agent edited `src/auth/session.ts` less than a minute ago in another session. Those changes may not be in your copy yet.",
