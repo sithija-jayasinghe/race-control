@@ -8,6 +8,7 @@ import {
 } from '@race-control/shared';
 import { useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
+import { approvalsKey, storeApproval } from '@/lib/approvals';
 import { flagsKey, upsertFlag } from '@/lib/flags';
 import { addRadio, radioKey } from '@/lib/radio';
 import { sessionsKey } from '@/lib/sessions';
@@ -26,7 +27,7 @@ function liveUrl(teamId: string): string {
   return `${scheme}://${window.location.host}/api/teams/${teamId}/live`;
 }
 
-/** Folds one live message into the cached sessions, feed, flags and Team Radio. */
+/** Folds one live message into the cached sessions, feed, flags, Team Radio and approvals. */
 export function applyLiveMessage(queryClient: QueryClient, teamId: string, message: LiveMessage) {
   if (message.type === 'session') {
     queryClient.setQueryData<AgentSession[]>(sessionsKey(teamId), (old = []) =>
@@ -35,17 +36,28 @@ export function applyLiveMessage(queryClient: QueryClient, teamId: string, messa
         .slice(0, MAX_SESSIONS),
     );
   } else if (message.type === 'event') {
-    queryClient.setQueryData<LiveEvent[]>(eventsKey(teamId), (old = []) => [...old, message.event].slice(-MAX_EVENTS));
+    // A held event comes again once a lead decides, with its new outcome: replace it in place.
+    queryClient.setQueryData<LiveEvent[]>(eventsKey(teamId), (old = []) =>
+      old.some((e) => e.id === message.event.id)
+        ? old.map((e) => (e.id === message.event.id ? message.event : e))
+        : [...old, message.event].slice(-MAX_EVENTS),
+    );
   } else if (message.type === 'flag') {
     queryClient.setQueryData<YellowFlag[]>(flagsKey(teamId), (old = []) => upsertFlag(old, message.flag));
   } else if (message.type === 'radio') {
     queryClient.setQueryData<TeamRadio[]>(radioKey(teamId), (old = []) => addRadio(old, message.radio));
+  } else if (message.type === 'approval') {
+    storeApproval(queryClient, teamId, message.approval);
+    // The session's timeline says who decided; fetch it again so it does.
+    if (message.approval.status !== 'pending') {
+      void queryClient.invalidateQueries({ queryKey: [...sessionsKey(teamId), message.approval.sessionId], exact: true });
+    }
   }
 }
 
 /**
  * Keeps a WebSocket open to the team's live channel and folds every message into the query cache.
- * Reconnects with backoff (1 s, 2 s, 4 s… up to 30 s) and re-fetches sessions and flags after reconnecting,
+ * Reconnects with backoff (1 s, 2 s, 4 s… up to 30 s) and re-fetches sessions, flags and approvals after reconnecting,
  * so nothing that happened while offline is missed.
  */
 export function useLiveTeam(teamId: string): LiveStatus {
@@ -65,6 +77,7 @@ export function useLiveTeam(teamId: string): LiveStatus {
         setStatus('live');
         void queryClient.invalidateQueries({ queryKey: sessionsKey(teamId) });
         void queryClient.invalidateQueries({ queryKey: flagsKey(teamId) });
+        void queryClient.invalidateQueries({ queryKey: approvalsKey(teamId) });
       };
       socket.onmessage = (event: MessageEvent) => {
         let data: unknown;

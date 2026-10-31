@@ -10,6 +10,8 @@ import {
 import type { AppDeps } from '../../app.ts';
 import { errorHeadline, hideHome, recordToolCall, redactSecrets, repoNameFromCwd } from '../../lib/redact.ts';
 import { findYellowFlags } from '../flags/repo.ts';
+import { insertApproval } from '../approvals/repo.ts';
+import { holdForApproval } from '../approvals/service.ts';
 import { findTeamRadio, radioMessage, radioName } from '../radio/service.ts';
 import { evaluateRules, type Evaluation } from '../rules/match.ts';
 import { findSessionView, serializeSession } from '../sessions/repo.ts';
@@ -89,15 +91,10 @@ const radioTools: readonly string[] = TEAM_RADIO_TOOLS;
 
 /** What the hook replies with, beyond "no decision". */
 export type HookOutcome = {
-  /** A team rule's decision, and the reason shown with it. */
-  permission?: { decision: 'deny' | 'ask'; reason: string };
+  /** A team rule's or a lead's decision, and the reason shown with it. */
+  permission?: { decision: 'allow' | 'deny'; reason: string };
   additionalContext?: string;
 };
-
-/** The reason Claude Code shows: to the agent for a block, in the developer's prompt for an ask. */
-function ruleReason(rule: NonNullable<Evaluation['enforced']>): string {
-  return rule.action === 'block' ? `Blocked by team rule: ${rule.name}` : `Race Control team rule: ${rule.name}`;
-}
 
 /** Checks a tool call against the team's rules. Matches on the raw command, which is never stored. */
 async function checkRules(deps: Pick<AppDeps, 'db' | 'rules'>, teamId: string, payload: HookPayload<'PreToolUse'>, target: string | null) {
@@ -109,14 +106,16 @@ async function checkRules(deps: Pick<AppDeps, 'db' | 'rules'>, teamId: string, p
 
 /**
  * Records one hook event for the token's team and developer, applying the team's rules to tool calls.
+ * A tool call that needs a lead is held here until one decides, the wait runs out, or `signal` aborts.
  * Also returns a Team Radio heads-up when someone else on the team recently edited the file the agent is
  * about to work on.
  */
 export async function ingestHookEvent<E extends IngestedHookEvent>(
-  deps: Pick<AppDeps, 'db' | 'now' | 'bus' | 'rules'>,
+  deps: Pick<AppDeps, 'db' | 'now' | 'bus' | 'rules' | 'approvals' | 'approvalWaitMs'>,
   auth: DevTokenAuth,
   event: E,
   payload: HookPayload<E>,
+  signal?: AbortSignal,
 ): Promise<HookOutcome> {
   const now = deps.now();
   const stored = toStoredEvent(event, payload);
@@ -125,7 +124,7 @@ export async function ingestHookEvent<E extends IngestedHookEvent>(
   const evaluation: Evaluation =
     event === 'PreToolUse' ? await checkRules(deps, auth.teamId, payload as HookPayload<'PreToolUse'>, stored.target) : { shadow: [] };
   const rule = evaluation.enforced;
-  const decision: EventDecision = !rule ? 'none' : rule.action === 'block' ? 'deny' : 'ask';
+  const decision: EventDecision = !rule ? 'none' : rule.action === 'block' ? 'deny' : 'pending';
   if (rule) stored.payload.rule = { id: rule.id, name: rule.name, action: rule.action };
   // Shadow mode: record what a rule would have caught, and change nothing.
   if (evaluation.shadow.length > 0) {
@@ -158,29 +157,32 @@ export async function ingestHookEvent<E extends IngestedHookEvent>(
       target: stored.target,
       summary: stored.summary,
       payloadRedacted: compact(stored.payload),
-      // Guardrails arrive in Week 4; until then Race Control never decides.
       decision,
       createdAt: now,
     });
-    return { sessionId, eventId, about };
+    const approvalId =
+      rule && decision === 'pending' ? await insertApproval(tx, { teamId: auth.teamId, sessionId, eventId, ruleId: rule.id, now }) : null;
+    return { sessionId, eventId, about, approvalId };
   });
 
   // Tell the team's dashboards, after the data is saved. Only redacted metadata goes out.
   const session = await findSessionView(deps.db, auth.teamId, ids.sessionId);
   if (session) deps.bus.publish(auth.teamId, { type: 'session', session: serializeSession(session) });
-  deps.bus.publish(auth.teamId, {
-    type: 'event',
-    event: {
-      id: ids.eventId,
-      sessionId: ids.sessionId,
-      type: event,
-      toolName: stored.toolName,
-      target: stored.target,
-      summary: stored.summary,
-      decision,
-      createdAt: now.toISOString(),
-    },
-  });
+  const publishEvent = (decision: EventDecision) =>
+    deps.bus.publish(auth.teamId, {
+      type: 'event',
+      event: {
+        id: ids.eventId,
+        sessionId: ids.sessionId,
+        type: event,
+        toolName: stored.toolName,
+        target: stored.target,
+        summary: stored.summary,
+        decision,
+        createdAt: now.toISOString(),
+      },
+    });
+  publishEvent(decision);
 
   // An edit may raise or extend a yellow flag on that file.
   if (event === 'PreToolUse' && decision !== 'deny' && stored.target && session?.repoName && editTools.includes(stored.toolName ?? '')) {
@@ -188,18 +190,27 @@ export async function ingestHookEvent<E extends IngestedHookEvent>(
     if (flag) deps.bus.publish(auth.teamId, { type: 'flag', flag });
   }
 
-  const permission = rule ? { decision: rule.action === 'block' ? ('deny' as const) : ('ask' as const), reason: ruleReason(rule) } : undefined;
-  if (ids.about.length === 0 || !stored.target || !repoName) return { permission };
-  deps.bus.publish(auth.teamId, {
-    type: 'radio',
-    radio: {
-      eventId: ids.eventId,
-      sessionId: ids.sessionId,
-      repoName,
-      target: stored.target,
-      about: ids.about,
-      createdAt: now.toISOString(),
-    },
-  });
-  return { permission, additionalContext: radioMessage(ids.about, stored.target, now) };
+  let additionalContext: string | undefined;
+  if (ids.about.length > 0 && stored.target && repoName) {
+    deps.bus.publish(auth.teamId, {
+      type: 'radio',
+      radio: {
+        eventId: ids.eventId,
+        sessionId: ids.sessionId,
+        repoName,
+        target: stored.target,
+        about: ids.about,
+        createdAt: now.toISOString(),
+      },
+    });
+    additionalContext = radioMessage(ids.about, stored.target, now);
+  }
+
+  if (!rule) return { additionalContext };
+  if (!ids.approvalId) return { permission: { decision: 'deny', reason: `Blocked by team rule: ${rule.name}` }, additionalContext };
+
+  // Pit lane: wait for a lead, then pass on the answer and show it on the dashboard.
+  const permission = await holdForApproval(deps, { teamId: auth.teamId, approvalId: ids.approvalId, ruleName: rule.name, signal });
+  publishEvent(permission.decision);
+  return { permission, additionalContext };
 }

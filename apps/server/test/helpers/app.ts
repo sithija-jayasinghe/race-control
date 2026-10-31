@@ -40,7 +40,10 @@ export type TestApp = {
   close: () => Promise<void>;
 };
 
-export async function createTestApp(options: { cookieSecure?: boolean } = {}): Promise<TestApp> {
+/** Held approvals wait this long in tests, unless a test asks for longer. */
+export const TEST_APPROVAL_WAIT_MS = 300;
+
+export async function createTestApp(options: { cookieSecure?: boolean; approvalWaitMs?: number } = {}): Promise<TestApp> {
   const { db, close: closeDb } = await createTestDb();
   const clock = createClock();
   const { mailer, sent } = createMemoryMailer();
@@ -53,6 +56,7 @@ export async function createTestApp(options: { cookieSecure?: boolean } = {}): P
     publicUrl: TEST_PUBLIC_URL,
     cookieSecure: options.cookieSecure ?? false,
     now: clock.now,
+    approvalWaitMs: options.approvalWaitMs ?? TEST_APPROVAL_WAIT_MS,
     logger: false,
   });
   return {

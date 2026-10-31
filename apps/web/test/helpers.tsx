@@ -1,5 +1,6 @@
 import type {
   AgentSession,
+  Approval,
   DevToken,
   Invite,
   LiveEvent,
@@ -58,6 +59,7 @@ export function fakeServer(options: { signedIn?: boolean; teams?: MeResponse['te
     flags: new Map<string, YellowFlag[]>(),
     events: new Map<string, LiveEvent[]>(),
     rules: new Map<string, RuleWithStats[]>(),
+    approvals: new Map<string, Approval[]>(),
   };
   const calls: Array<{ method: string; path: string; body: unknown }> = [];
   const members = (teamId: string) => state.members.get(teamId) ?? [];
@@ -181,6 +183,31 @@ export function fakeServer(options: { signedIn?: boolean; teams?: MeResponse['te
     ],
     ['POST', /^\/teams\/([^/]+)\/rules\/test$/, () => ok({ decision: 'none', ruleId: null, shadowIds: [] })],
     ['POST', /^\/teams\/([^/]+)\/rules\/preview$/, () => ok({ count: 0, examples: [] })],
+    ['GET', /^\/teams\/([^/]+)\/approvals$/, (_, [teamId]) => ok(state.approvals.get(teamId!) ?? [])],
+    [
+      'GET',
+      /^\/teams\/([^/]+)\/approvals\/([^/]+)$/,
+      (_, [teamId, approvalId]) => {
+        const approval = (state.approvals.get(teamId!) ?? []).find((a) => a.id === approvalId);
+        return approval ? ok(approval) : fail(404, 'not_found');
+      },
+    ],
+    [
+      'POST',
+      /^\/teams\/([^/]+)\/approvals\/([^/]+)\/decision$/,
+      (body, [teamId, approvalId]) => {
+        if (state.teams.find((t) => t.id === teamId)?.role !== 'lead') return fail(403, 'forbidden');
+        const approval = (state.approvals.get(teamId!) ?? []).find((a) => a.id === approvalId);
+        if (!approval) return fail(404, 'not_found');
+        if (approval.status !== 'pending') return fail(409, 'already_decided');
+        Object.assign(approval, {
+          status: (body as { decision: string }).decision === 'approve' ? 'approved' : 'denied',
+          decidedAt: new Date().toISOString(),
+          decidedBy: { userId: USER.id, name: 'lead' },
+        });
+        return ok(approval);
+      },
+    ],
     ['GET', /^\/setup\/hooks$/, () => ok({ hooksUrl: 'http://api.test/hooks' })],
     ['GET', /^\/teams\/([^/]+)\/tokens$/, (_, [teamId]) => ok(state.tokens.get(teamId!) ?? [])],
     [
@@ -331,6 +358,32 @@ export function yellowFlag(sessions: AgentSession[], target = 'src/auth/session.
       lastAt: s.lastEventAt,
     })),
     expiresAt: new Date(Date.now() + 20 * 60_000).toISOString(),
+  };
+}
+
+/** Amaya's agent waiting to write a migration, with 3 minutes 59 seconds left. */
+export function approval(overrides: Partial<Approval> = {}): Approval {
+  const requestedAt = Date.now() - 1000;
+  return {
+    id: newId(),
+    sessionId: newId(),
+    eventId: newId(),
+    status: 'pending',
+    ruleId: newId(),
+    ruleName: 'Migrations need a lead',
+    userId: TEAMMATE.id,
+    userEmail: 'amaya@example.test',
+    userName: 'Amaya',
+    agent: 'claude_code',
+    repoName: 'buildflow-api',
+    toolName: 'Write',
+    target: 'db/migrations/0042_users.sql',
+    summary: 'write db/migrations/0042_users.sql',
+    requestedAt: new Date(requestedAt).toISOString(),
+    expiresAt: new Date(requestedAt + 4 * 60_000).toISOString(),
+    decidedAt: null,
+    decidedBy: null,
+    ...overrides,
   };
 }
 

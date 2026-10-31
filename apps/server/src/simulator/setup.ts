@@ -48,13 +48,14 @@ export async function setupDemoTeam(db: Database, options: { viewerEmail?: strin
       await tx.insert(memberships).values({ teamId, userId: leadId, role: 'lead' });
     }
 
-    // The starter rules, with the .env rule enforced so the race shows a blocked edit.
+    // The starter rules, with the .env and migration rules live, so the race shows a blocked edit and an
+    // approval.
     if ((await tx.$count(rules, eq(rules.teamId, teamId))) === 0) {
       await seedStarterRules(tx, teamId, options.now);
       await tx
         .update(rules)
         .set({ mode: 'enforce' })
-        .where(and(eq(rules.teamId, teamId), eq(rules.pattern, '**/.env*')));
+        .where(and(eq(rules.teamId, teamId), inArray(rules.pattern, ['**/.env*', '**/migrations/**'])));
     }
 
     if (options.viewerEmail) {

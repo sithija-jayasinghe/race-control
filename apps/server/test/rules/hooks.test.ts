@@ -97,21 +97,6 @@ describe('rules on PreToolUse', () => {
     expect(timeline.events.at(-1)).toMatchObject({ decision: 'deny', detail: 'Blocked by rule: Never touch .env files' });
   });
 
-  it('falls back to the developer’s own prompt for an enforced approval rule', async () => {
-    await setRule('Migrations need a lead', { mode: 'enforce' });
-
-    const response = await toolCall('Write', { file_path: '/Users/someone/code/api/db/migrations/0042.sql', content: 'x' });
-
-    expect(response.json()).toEqual({
-      hookSpecificOutput: {
-        hookEventName: 'PreToolUse',
-        permissionDecision: 'ask',
-        permissionDecisionReason: 'Race Control team rule: Migrations need a lead',
-      },
-    });
-    expect((await lastEvent()).decision).toBe('ask');
-  });
-
   it('matches Bash rules on the real command but never stores its secrets', async () => {
     await t.db.insert(schema.rules).values({
       teamId,

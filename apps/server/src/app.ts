@@ -1,12 +1,15 @@
 import cookie from '@fastify/cookie';
 import websocket from '@fastify/websocket';
 import rateLimit from '@fastify/rate-limit';
+import { APPROVAL_WAIT_MS } from '@race-control/shared';
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastify';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import type { Database } from './db/client.ts';
 import { registerErrorHandler } from './lib/errors.ts';
 import { TeamBus } from './lib/team-bus.ts';
 import type { Mailer } from './lib/mailer.ts';
+import { ApprovalHub } from './modules/approvals/hub.ts';
+import { approvalRoutes } from './modules/approvals/routes.ts';
 import { authRoutes } from './modules/auth/routes.ts';
 import { flagRoutes } from './modules/flags/routes.ts';
 import { hookRoutes } from './modules/hooks/routes.ts';
@@ -36,11 +39,16 @@ export type AppDeps = {
   bus: TeamBus;
   /** Each team's enabled rules, for the hook endpoint. */
   rules: RuleCache;
+  /** Hook requests held for a lead's approval. */
+  approvals: ApprovalHub;
+  /** How long a held request waits for a lead. Tests shorten it. */
+  approvalWaitMs: number;
 };
 
-export type BuildAppOptions = Omit<AppDeps, 'now' | 'bus' | 'rules'> & {
+export type BuildAppOptions = Omit<AppDeps, 'now' | 'bus' | 'rules' | 'approvals' | 'approvalWaitMs'> & {
   now?: () => Date;
   bus?: TeamBus;
+  approvalWaitMs?: number;
   logger?: FastifyServerOptions['logger'];
 };
 
@@ -48,9 +56,10 @@ export async function buildApp({
   logger,
   now = () => new Date(),
   bus = new TeamBus(),
+  approvalWaitMs = APPROVAL_WAIT_MS,
   ...rest
 }: BuildAppOptions): Promise<FastifyInstance> {
-  const deps: AppDeps = { ...rest, now, bus, rules: new RuleCache(now) };
+  const deps: AppDeps = { ...rest, now, bus, rules: new RuleCache(now), approvals: new ApprovalHub(), approvalWaitMs };
   const app = Fastify({
     logger: logger ?? { redact: ['req.headers.authorization', 'req.headers.cookie'] },
   });
@@ -75,6 +84,7 @@ export async function buildApp({
   sessionRoutes(app, deps);
   flagRoutes(app, deps);
   ruleRoutes(app, deps);
+  approvalRoutes(app, deps);
   liveRoutes(app, deps);
 
   return app;

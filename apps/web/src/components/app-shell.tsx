@@ -1,5 +1,5 @@
 import type { MyTeam } from '@race-control/shared';
-import { Check, ChevronDown, Gauge, History, Plus, Settings2, ShieldCheck, Users, type LucideIcon } from 'lucide-react';
+import { Check, ChevronDown, Gauge, Hand, History, Plus, Settings2, ShieldCheck, Users, type LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router';
 import { FLAGS, type FlagStatus } from '@/components/status-flag';
@@ -13,13 +13,14 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Wordmark } from '@/components/wordmark';
+import { useApprovals, waitingApprovals } from '@/lib/approvals';
 import { cn } from '@/lib/utils';
 
-export type NavKey = 'pit-wall' | 'sessions' | 'rules' | 'team' | 'settings';
+export type NavKey = 'pit-wall' | 'approvals' | 'sessions' | 'rules' | 'team' | 'settings';
 
-// Approvals and Rules join this list in Week 4 (docs/design/UI.md).
 const navItems: Array<{ key: NavKey; label: string; icon: LucideIcon; path: string }> = [
   { key: 'pit-wall', label: 'Pit wall', icon: Gauge, path: '' },
+  { key: 'approvals', label: 'Approvals', icon: Hand, path: '/approvals' },
   { key: 'sessions', label: 'Sessions', icon: History, path: '/sessions' },
   { key: 'rules', label: 'Rules', icon: ShieldCheck, path: '/rules' },
   { key: 'team', label: 'Team', icon: Users, path: '/team' },
@@ -79,6 +80,14 @@ function TeamSwitcher({ team, teams }: { team: MyTeam; teams: MyTeam[] }) {
 /** Floating glass chrome over the track scene: icon rail and top bar on desktop, top bar and tab bar on phones. */
 export function AppShell({ team, teams, active, counts, actions, userEmail, scene, children }: AppShellProps) {
   const to = (path: string) => `/t/${team.id}${path}`;
+  const waiting = waitingApprovals(useApprovals(team.id).data ?? []).length;
+  const badge = (key: NavKey) =>
+    key === 'approvals' && waiting > 0 ? (
+      <span className="absolute -top-0.5 -right-0.5 grid min-w-4 place-items-center rounded-full bg-flag-blue px-1 font-mono text-[10px] leading-4 text-white">
+        {waiting}
+      </span>
+    ) : null;
+  const navLabel = (key: NavKey, label: string) => (key === 'approvals' && waiting > 0 ? `${label}, ${waiting} waiting` : label);
 
   return (
     <div className="relative isolate min-h-dvh">
@@ -89,7 +98,7 @@ export function AppShell({ team, teams, active, counts, actions, userEmail, scen
           <Link
             key={key}
             to={to(path)}
-            aria-label={label}
+            aria-label={navLabel(key, label)}
             aria-current={key === active ? 'page' : undefined}
             className={cn(
               'group relative grid size-9 place-items-center rounded-[10px] text-muted-foreground/70 hover:bg-white/5 hover:text-foreground',
@@ -98,6 +107,7 @@ export function AppShell({ team, teams, active, counts, actions, userEmail, scen
             )}
           >
             <Icon className="size-[18px]" aria-hidden="true" />
+            {badge(key)}
             <span className="glass pointer-events-none absolute left-12 rounded-lg px-2 py-1 text-xs whitespace-nowrap text-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
               {label}
             </span>
@@ -137,20 +147,23 @@ export function AppShell({ team, teams, active, counts, actions, userEmail, scen
 
       <nav
         aria-label="Main"
-        className="glass fixed inset-x-3 bottom-3 z-20 grid grid-cols-5 rounded-2xl pb-[env(safe-area-inset-bottom)] md:hidden"
+        className="glass fixed inset-x-3 bottom-3 z-20 grid grid-cols-6 rounded-2xl pb-[env(safe-area-inset-bottom)] md:hidden"
       >
         {navItems.map(({ key, label, icon: Icon, path }) => (
           <Link
             key={key}
             to={to(path)}
-            aria-label={label}
+            aria-label={navLabel(key, label)}
             aria-current={key === active ? 'page' : undefined}
             className={cn(
-              'flex min-h-14 items-center justify-center text-muted-foreground',
+              'relative flex min-h-14 items-center justify-center text-muted-foreground',
               key === active && 'text-foreground',
             )}
           >
-            <Icon className="size-5" aria-hidden="true" />
+            <span className="relative">
+              <Icon className="size-5" aria-hidden="true" />
+              {badge(key)}
+            </span>
           </Link>
         ))}
       </nav>

@@ -86,7 +86,13 @@ function detailFrom(type: string, payload: unknown): string | null {
   if (type === 'PostToolUseFailure') return pick('error');
   const rule = p.rule as { name?: unknown; action?: unknown } | undefined;
   if (type === 'PreToolUse' && typeof rule?.name === 'string') {
-    return rule.action === 'block' ? `Blocked by rule: ${rule.name}` : `Asked the developer, rule: ${rule.name}`;
+    if (rule.action === 'block') return `Blocked by rule: ${rule.name}`;
+    const approval = p.approval as { status?: unknown; by?: unknown } | undefined;
+    const by = typeof approval?.by === 'string' ? ` by ${approval.by}` : '';
+    if (approval?.status === 'approved') return `Approved${by}, rule: ${rule.name}`;
+    if (approval?.status === 'denied') return `Denied${by}, rule: ${rule.name}`;
+    if (approval?.status === 'expired') return `No answer in time, rule: ${rule.name}`;
+    return `Waiting for a lead, rule: ${rule.name}`;
   }
   if (type === 'SessionEnd') return pick('reason');
   if (type === 'SessionStart') return [pick('source'), pick('model')].filter(Boolean).join(' · ') || null;

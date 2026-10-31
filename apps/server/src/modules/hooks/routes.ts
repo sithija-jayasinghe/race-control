@@ -21,8 +21,9 @@ function rateLimitKey(request: FastifyRequest): string {
  * `POST /hooks/:event`: where Claude Code's HTTP hooks send events (SPEC section 4).
  *
  * Answers fast with an empty 200, which Claude Code reads as "no decision", so agents carry on, unless a
- * team rule decides (`deny` for a block, `ask` for an approval) or there's a Team Radio heads-up for
- * `additionalContext`. Events Race Control doesn't record are accepted and ignored.
+ * team rule decides or there's a Team Radio heads-up for `additionalContext`. A block answers `deny`; a
+ * rule that needs a lead holds the request until one answers (`allow` or `deny`) or the wait runs out
+ * (`deny`). Events Race Control doesn't record are accepted and ignored.
  */
 export function hookRoutes(app: FastifyInstance, deps: AppDeps) {
   app.post(
@@ -43,7 +44,12 @@ export function hookRoutes(app: FastifyInstance, deps: AppDeps) {
         return reply.code(400).send({ error: 'invalid_payload' });
       }
 
-      const { permission, additionalContext } = await ingestHookEvent(deps, request.devAuth!, event, parsed.data);
+      // An agent that gives up on a held request (the developer pressed Esc) closes the connection.
+      const hungUp = new AbortController();
+      reply.raw.on('close', () => {
+        if (!reply.raw.writableFinished) hungUp.abort();
+      });
+      const { permission, additionalContext } = await ingestHookEvent(deps, request.devAuth!, event, parsed.data, hungUp.signal);
       if (!permission && !additionalContext) return reply.code(200).send();
       return reply.code(200).send({
         hookSpecificOutput: {

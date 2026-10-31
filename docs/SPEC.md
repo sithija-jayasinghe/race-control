@@ -153,6 +153,16 @@ New rules start in `shadow` mode, so the lead can see what a rule would catch be
 
 **Approval wait:** keep it below the hook `timeout` (300 s in the snippet). If nobody answers, respond `deny` with "No approval within 4 minutes". This is fail-closed for actions the team flagged as risky.
 
+**How approvals work:**
+
+- The held event is recorded with the decision `pending`, and the approval goes out on the team's live channel straight away, so the Pit wall shows the pit lane card and the agent's driver turns blue (`PIT`).
+- Every member can see approvals; only leads decide. The first answer wins: a second lead, or an answer after the wait ran out, gets `409 already_decided`.
+- Approve answers `allow` ("Approved by a team lead in Race Control (team rule: …)"); deny answers `deny` ("Denied by a team lead …"). The developer's own deny and ask permission rules still apply after an `allow`. Reasons reach the agent, so they never include a person's name.
+- The event is updated to `allow` or `deny`, and the timeline step says who decided ("Approved by Sam, rule: …").
+- If the agent hangs up (the developer pressed Esc, or the hook timed out), the approval expires at once.
+- Held requests live in the server's memory, so approvals still pending when the server starts are expired (and their events denied). Running more than one server instance would need a shared channel (for example Postgres `LISTEN/NOTIFY`) for both held requests and the live channel.
+- The Approvals page shows waiting approvals and the last 24 hours of answers.
+
 **If Race Control is down:** by default, a hook that can't reach the server is a non-blocking error and the agent carries on (fail-open for availability). A team can choose fail-closed instead: the snippet generator adds `"onFailure": "block"` to the `PreToolUse` hook. Default to fail-open, and confirm both behaviours in testing. Document this honestly. Race Control is a team safety net, not a security boundary.
 
 Starter rules seeded for every new team, in shadow mode (file edits means `Edit|MultiEdit|Write|NotebookEdit`):
@@ -162,7 +172,7 @@ Starter rules seeded for every new team, in shadow mode (file edits means `Edit|
 - Approve file edits on `**/migrations/**`
 - Approve `Bash` matching `npm publish*`
 
-Until approvals are built (Week 4, step 3), an enforced approve rule answers `ask`, so the developer's own permission prompt decides. The simulator's Demo team enforces the `.env` rule, so its race shows a blocked edit.
+The simulator's Demo team enforces the `.env` and migration rules, so its race shows a blocked edit and a migration waiting for a lead.
 
 ## 6. Privacy and security
 

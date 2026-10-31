@@ -4,6 +4,7 @@ import { FullScreen } from '@/components/full-screen';
 import { StartLights } from '@/components/start-lights';
 import { rememberNextPath, useMe } from '@/lib/auth';
 import { useLiveTeam, type LiveStatus } from '@/lib/live';
+import { ApprovalPage, ApprovalsPage } from '@/pages/approvals';
 import { InvitePage } from '@/pages/invite';
 import { PitWallPage } from '@/pages/pit-wall';
 import { SessionPage } from '@/pages/session';
@@ -116,6 +117,8 @@ export const routes: RouteObject[] = [
         element: <TeamLayout />,
         children: [
           { index: true, element: <PitWallPage /> },
+          { path: 'approvals', element: <ApprovalsPage /> },
+          { path: 'approvals/:approvalId', element: <ApprovalPage /> },
           { path: 'sessions', element: <SessionsPage /> },
           { path: 'sessions/:sessionId', element: <SessionPage /> },
           { path: 'rules', element: <RulesPage /> },

@@ -42,7 +42,7 @@ Each status always has a word as well as a colour, so it never relies on colour 
 | **Team Radio card** | Waveform, "TEAM RADIO NIM → KAS" and the heads-up as a quote |
 | **LIVE clock** | Red LIVE tag and elapsed session time |
 | **Counters** | Glowing dots and numbers for each status in the top bar, with the words for screen readers |
-| **Approval card** | Blue kerb stripe, who wants to do what, a countdown to auto-deny, Deny and Approve (Week 4) |
+| **Approval card** | Blue kerb stripe, who wants to do what, a countdown to auto-deny, Deny and Approve |
 | **Command palette** | ⌘K to jump to any agent, file or rule (added when there is something to jump to) |
 
 ## Who's on the track
@@ -61,6 +61,13 @@ Each status always has a word as well as a colour, so it never relies on colour 
 - **Drawer** (leads): kerb stripe, the name typed as a heading, **Stop / Pit**, tool chips (Edit, Write, Bash, Any), the pattern, and a live "would have caught n in the last 7 days" with real, redacted examples. New rules are saved with **Add in shadow**; clicking a rule's name edits it in the same drawer.
 - Rules are turned off, never deleted. Developers see everything without the controls. A team with no rules offers its lead the five starter rules.
 - The spec and code say `enforce`; the page says **Live**.
+
+## Approvals
+
+- **Pit lane card** on the Pit wall, bottom left (full width above the tab bar on phones): blue kerb, "PIT LANE" and a countdown to auto-deny, "**Amaya** wants to write", the file or command in mono, the rule and repo, a draining blue bar, then **Deny** and **Approve**. It shows the oldest waiting approval, with "+n waiting" linking to the queue. After an answer the card says what happened for a moment ("Approved. Amaya's agent carries on."). Developers see "Waiting for a lead" instead of the buttons. While it shows, the Team Radio card steps aside on screens narrower than 1280 px.
+- **Approvals page** (`/approvals`): the pit lane (waiting, with a clock and the buttons on each row), then "Last 24 hours" as **GO** (approved), **STOP** (denied) and **OUT** (no answer), with who answered and when. Answered rows open the session's timeline.
+- **Phone screen** (`/approvals/:id`, from the card's "Pit lane" link or a queue row): the clock big, the target unclipped, and **Approve** above **Deny** in thumb reach.
+- The nav item has a blue badge with the number waiting.
 
 ## Layout
 
@@ -81,7 +88,7 @@ Desktop                                              Phone
 
 - **Desktop:** a thin floating icon rail with tooltips; a top bar with the wordmark, team, counters, LIVE clock and theme menu.
 - **Phone:** the same top bar without counters; a floating glass tab bar with icons; the tower goes full width above the scene.
-- Navigation: Pit wall, Sessions, Rules, Team, Settings. Approvals appears once it's built. Everything team-specific lives under `/t/:teamId/...`.
+- Navigation: Pit wall, Approvals (with a badge for waiting approvals), Sessions, Rules, Team, Settings. Everything team-specific lives under `/t/:teamId/...`.
 - Every screen works from 360 px wide, with no horizontal scrolling and tap targets of at least 44 px.
 
 ## Building blocks
