@@ -1,4 +1,15 @@
-import type { AgentSession, DevToken, Invite, LiveEvent, Member, MeResponse, MyTeam, Role, YellowFlag } from '@race-control/shared';
+import type {
+  AgentSession,
+  DevToken,
+  Invite,
+  LiveEvent,
+  Member,
+  MeResponse,
+  MyTeam,
+  Role,
+  RuleWithStats,
+  YellowFlag,
+} from '@race-control/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render } from '@testing-library/react';
 import { StrictMode } from 'react';
@@ -46,6 +57,7 @@ export function fakeServer(options: { signedIn?: boolean; teams?: MeResponse['te
     sessions: new Map<string, AgentSession[]>(),
     flags: new Map<string, YellowFlag[]>(),
     events: new Map<string, LiveEvent[]>(),
+    rules: new Map<string, RuleWithStats[]>(),
   };
   const calls: Array<{ method: string; path: string; body: unknown }> = [];
   const members = (teamId: string) => state.members.get(teamId) ?? [];
@@ -146,6 +158,29 @@ export function fakeServer(options: { signedIn?: boolean; teams?: MeResponse['te
         return ok({ session, events: events.map((e) => ({ detail: null, radio: null, ...e })), truncated: false });
       },
     ],
+    ['GET', /^\/teams\/([^/]+)\/rules$/, (_, [teamId]) => ok(state.rules.get(teamId!) ?? [])],
+    [
+      'POST',
+      /^\/teams\/([^/]+)\/rules$/,
+      (body, [teamId]) => {
+        const created = { ...(body as Omit<RuleWithStats, 'id'>), id: newId(), mode: 'shadow' as const, enabled: true, createdAt: new Date().toISOString() };
+        state.rules.set(teamId!, [...(state.rules.get(teamId!) ?? []), { ...created, matches: [0, 0, 0, 0, 0, 0, 0] }]);
+        return { status: 201, body: created };
+      },
+    ],
+    [
+      'PATCH',
+      /^\/teams\/([^/]+)\/rules\/([^/]+)$/,
+      (body, [teamId, ruleId]) => {
+        const rules = state.rules.get(teamId!) ?? [];
+        const rule = rules.find((r) => r.id === ruleId);
+        if (!rule) return fail(404, 'not_found');
+        Object.assign(rule, body);
+        return ok({ ...rule, matches: undefined });
+      },
+    ],
+    ['POST', /^\/teams\/([^/]+)\/rules\/test$/, () => ok({ decision: 'none', ruleId: null, shadowIds: [] })],
+    ['POST', /^\/teams\/([^/]+)\/rules\/preview$/, () => ok({ count: 0, examples: [] })],
     ['GET', /^\/setup\/hooks$/, () => ok({ hooksUrl: 'http://api.test/hooks' })],
     ['GET', /^\/teams\/([^/]+)\/tokens$/, (_, [teamId]) => ok(state.tokens.get(teamId!) ?? [])],
     [
@@ -296,5 +331,21 @@ export function yellowFlag(sessions: AgentSession[], target = 'src/auth/session.
       lastAt: s.lastEventAt,
     })),
     expiresAt: new Date(Date.now() + 20 * 60_000).toISOString(),
+  };
+}
+
+/** A rule as the Rules page lists it. */
+export function rule(overrides: Partial<RuleWithStats> = {}): RuleWithStats {
+  return {
+    id: newId(),
+    name: 'Never touch .env files',
+    tool: 'Edit|MultiEdit|Write|NotebookEdit',
+    pattern: '**/.env*',
+    action: 'block',
+    mode: 'shadow',
+    enabled: true,
+    createdAt: new Date().toISOString(),
+    matches: [0, 1, 0, 0, 2, 0, 1],
+    ...overrides,
   };
 }

@@ -54,6 +54,14 @@ Each status always has a word as well as a colour, so it never relies on colour 
 - **Team Radio:** when the server sends an agent a heads-up, the Pit wall shows a Team Radio card from Race Control to that driver ("TEAM RADIO RC → KAS", "Nimal edited src/auth/session.ts 2 min ago") for 15 seconds, latest only. The timeline tags the step that heard it, with who it was about.
 - On phones the map is hidden; the tower and the session list remain.
 
+## Rules page
+
+- **Test lane** at the top: type a file path or a command (anything with a space) and the server says what would happen: "● Stopped by …", "● Pit lane: … needs a lead" or "Goes through", plus the shadow rules it would trip. Matching rows light up with a red or blue edge.
+- **Rows:** a tower-style tag, **STOP** (block, red) or **PIT** (needs a lead, blue), then the name and the tools and pattern in mono. Shadow rules are ghosts: dashed tag, dimmed name. A rule that's off is struck through. Seven small bars show how often it matched each day for the last week (hidden on phones), then a **Shadow / Live** switch and an on/off switch. On phones the controls take a second line.
+- **Drawer** (leads): kerb stripe, the name typed as a heading, **Stop / Pit**, tool chips (Edit, Write, Bash, Any), the pattern, and a live "would have caught n in the last 7 days" with real, redacted examples. New rules are saved with **Add in shadow**; clicking a rule's name edits it in the same drawer.
+- Rules are turned off, never deleted. Developers see everything without the controls. A team with no rules offers its lead the five starter rules.
+- The spec and code say `enforce`; the page says **Live**.
+
 ## Layout
 
 ```text
@@ -73,7 +81,7 @@ Desktop                                              Phone
 
 - **Desktop:** a thin floating icon rail with tooltips; a top bar with the wordmark, team, counters, LIVE clock and theme menu.
 - **Phone:** the same top bar without counters; a floating glass tab bar with icons; the tower goes full width above the scene.
-- Navigation: Pit wall, Sessions, Team, Settings. Items for later weeks (Approvals, Rules) appear only once they're built. Everything team-specific lives under `/t/:teamId/...`.
+- Navigation: Pit wall, Sessions, Rules, Team, Settings. Approvals appears once it's built. Everything team-specific lives under `/t/:teamId/...`.
 - Every screen works from 360 px wide, with no horizontal scrolling and tap targets of at least 44 px.
 
 ## Building blocks

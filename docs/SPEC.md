@@ -147,6 +147,8 @@ Evaluation in the `PreToolUse` handler:
 - Bash: the command is split at `&&`, `||`, `;`, `|` and new lines, and each part must match as a whole. `*` matches anything. `npm publish*` matches `pnpm build && npm publish --access public`, but not `echo "npm publish"`.
 - Everything else is literal. Tool names are case-sensitive.
 
+**Managing rules:** every member sees the team's rules and can try a file or command against them; only leads add, edit, switch modes or turn rules off (never delete). A team has at most 100 rules. A change through the API clears the server's rule cache at once; changes made elsewhere (the simulator) apply within 30 seconds.
+
 New rules start in `shadow` mode, so the lead can see what a rule would catch before it blocks anyone. When a lead approves an action, they can choose "always allow this", which creates a matching rule.
 
 **Approval wait:** keep it below the hook `timeout` (300 s in the snippet). If nobody answers, respond `deny` with "No approval within 4 minutes". This is fail-closed for actions the team flagged as risky.

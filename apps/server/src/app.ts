@@ -14,6 +14,7 @@ import { liveRoutes } from './modules/sessions/live.ts';
 import { sessionRoutes } from './modules/sessions/routes.ts';
 import { inviteRoutes } from './modules/invites/routes.ts';
 import { RuleCache } from './modules/rules/cache.ts';
+import { ruleRoutes } from './modules/rules/routes.ts';
 import { teamRoutes } from './modules/teams/routes.ts';
 import { tokenRoutes } from './modules/tokens/routes.ts';
 import { registerAuth } from './plugins/auth.ts';
@@ -73,6 +74,7 @@ export async function buildApp({
   hookRoutes(app, deps);
   sessionRoutes(app, deps);
   flagRoutes(app, deps);
+  ruleRoutes(app, deps);
   liveRoutes(app, deps);
 
   return app;
