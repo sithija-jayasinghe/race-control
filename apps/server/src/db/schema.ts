@@ -112,7 +112,12 @@ export const sessions = pgTable(
     agent: agentEnum('agent').notNull(),
     // The agent's own session id, e.g. Claude Code's `session_id`.
     agentSessionId: text('agent_session_id').notNull(),
+    // Display name: the remote's last segment, or the folder name when there's no remote.
     repoName: text('repo_name'),
+    // Which repo, for matching: `github.com/org/api` from the git remote, or `local:<folder>` without one.
+    repoKey: text('repo_key'),
+    // The repo's top folder (home hidden). File paths are stored relative to it.
+    repoRoot: text('repo_root'),
     cwd: text('cwd'),
     startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
     endedAt: timestamp('ended_at', { withTimezone: true }),
@@ -139,6 +144,8 @@ export const events = pgTable(
     toolName: text('tool_name'),
     // Normalised file path or command the tool acted on. Used by rules, collisions and Team Radio.
     target: text('target'),
+    // The repo the target is in (see `sessions.repo_key`). Per event, because an agent can `cd` into another repo.
+    repoKey: text('repo_key'),
     summary: text('summary'),
     payloadRedacted: jsonb('payload_redacted').notNull().default({}),
     decision: eventDecisionEnum('decision').notNull().default('none'),
@@ -154,6 +161,8 @@ export const events = pgTable(
     index('events_team_created_idx').on(t.teamId, t.createdAt.desc()),
     index('events_session_created_idx').on(t.sessionId, t.createdAt),
     index('events_team_target_created_idx').on(t.teamId, t.target, t.createdAt.desc()),
+    // Yellow flags and Team Radio: the same file in the same repo.
+    index('events_team_repo_target_created_idx').on(t.teamId, t.repoKey, t.target, t.createdAt.desc()),
   ],
 );
 

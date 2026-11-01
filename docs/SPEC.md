@@ -62,7 +62,8 @@ Hooks live in `.claude/settings.json` (project, shared via the repo), `.claude/s
 ```json
 {
   "hooks": {
-    "SessionStart": [{ "hooks": [{ "type": "http", "url": "https://racecontrol.example/hooks/SessionStart", "headers": { "Authorization": "Bearer $RACE_CONTROL_TOKEN" }, "allowedEnvVars": ["RACE_CONTROL_TOKEN"] }] }],
+    "SessionStart": [{ "hooks": [{ "type": "command", "command": "<session hook, below>", "timeout": 10 }] }],
+    "CwdChanged":   [{ "hooks": [{ "type": "command", "command": "<session hook, below>", "timeout": 10 }] }],
     "PreToolUse":   [{ "matcher": "*", "hooks": [{ "type": "http", "url": "https://racecontrol.example/hooks/PreToolUse", "timeout": 300, "headers": { "Authorization": "Bearer $RACE_CONTROL_TOKEN" }, "allowedEnvVars": ["RACE_CONTROL_TOKEN"] }] }],
     "PostToolUse":  [{ "matcher": "*", "hooks": [{ "type": "http", "url": "https://racecontrol.example/hooks/PostToolUse", "headers": { "Authorization": "Bearer $RACE_CONTROL_TOKEN" }, "allowedEnvVars": ["RACE_CONTROL_TOKEN"] }] }],
     "Stop":         [{ "hooks": [{ "type": "http", "url": "https://racecontrol.example/hooks/Stop", "headers": { "Authorization": "Bearer $RACE_CONTROL_TOKEN" }, "allowedEnvVars": ["RACE_CONTROL_TOKEN"] }] }],
@@ -72,6 +73,24 @@ Hooks live in `.claude/settings.json` (project, shared via the repo), `.claude/s
 ```
 
 The developer then sets `export RACE_CONTROL_TOKEN=...` in their shell. Headers only interpolate variables listed in `allowedEnvVars`.
+
+**The session hook.** Hook inputs carry no git information, and an HTTP hook can't run anything, so `SessionStart` and `CwdChanged` use a one-line command hook (`sessionHookCommand` in `packages/shared/src/hooks.ts`). It runs in Claude Code's current folder:
+
+1. `git rev-parse --show-toplevel` for the repo's top folder, and `git remote get-url upstream`, falling back to `origin`, for its remote (so a developer working from a fork matches the team's repo).
+2. `sed` removes any `user:token@` from the remote before it leaves the machine.
+3. `curl` posts the hook's JSON to Race Control with both as `x-race-control-repo-root` and `x-race-control-repo-remote` headers. Its output is discarded (Claude would see `SessionStart` output) and it always exits 0, so it never gets in the agent's way. Outside a git repo the headers are empty.
+
+It needs `sh`, `git` and `curl`: macOS, Linux, WSL and Git Bash on Windows. Without them, or with an older snippet, Race Control falls back to the folder name. The token is passed to `curl` as an argument, so it is visible in the developer's own process list while the hook runs.
+
+### Which repo, and which file
+
+Two people's agents are on the same file when the **repo key** and the **path from the repo's top folder** match:
+
+- **Repo key:** the remote, normalised so every form of it is the same (`git@github.com:Org/Api.git`, `https://user:token@github.com/org/api` and `ssh://git@github.com:22/org/api` are all `github.com/org/api`). The server drops credentials and ports again and never stores the raw remote. Without a remote, the key is `local:<top folder name>`; without the session hook, `local:<last folder of cwd>`.
+- **Paths** are relative to the repo's top folder, so an agent started in `apps/web` still reports `apps/web/src/x.ts`.
+- Repo headers are ignored unless the agent's folder is inside the top folder they name.
+- The key is stored on each event as well as the session, because an agent can `cd` into another repo mid-session. `CwdChanged` only updates the session's repo; it isn't shown as a step. An event in a folder outside the session's repo falls back to that folder's name.
+- Sessions and events from before this change keep `local:<folder>` keys.
 
 HTTP hooks time out after 600 s by default. The snippet sets 300 s on `PreToolUse` so a held approval expires on Race Control's side first. A hook can also set `"onFailure": "block"` (Claude Code v2.1.295+) so the tool call is blocked if Race Control can't be reached (see section 5).
 
@@ -83,13 +102,14 @@ Every event: `session_id`, `cwd`, `hook_event_name`, and sometimes `permission_m
 
 | Event | Extra fields used | Session becomes |
 |---|---|---|
-| `SessionStart` | `source` (startup, resume, clear, compact, fork), `model` | active |
+| `SessionStart` | `source` (startup, resume, clear, compact, fork), `model`, and the repo headers | active |
+| `CwdChanged` | `new_cwd`, and the repo headers. Not stored as an event | active |
 | `PreToolUse`, `PostToolUse` | `tool_name`, `tool_input`, `tool_use_id`. `tool_response` is discarded | active |
 | `PostToolUseFailure` | as above, plus the first line of `error` and `is_interrupt` | active |
 | `Stop` | none. `last_assistant_message` (Claude's reply) is discarded | idle |
 | `SessionEnd` | `reason` | ended |
 
-Other events get an empty `200` and aren't stored. A session is created by its first event, even if `SessionStart` was missed, and `repo_name` is the last folder of `cwd`. `SessionEnd` hooks time out after 1.5 s by default, so the endpoint must answer quickly.
+Other events get an empty `200` and aren't stored. A session is created by its first event, even if `SessionStart` was missed. Its repo comes from the session hook, or the last folder of `cwd` (see "Which repo, and which file"). `SessionEnd` hooks time out after 1.5 s by default, so the endpoint must answer quickly.
 
 ### How Race Control answers `PreToolUse`
 
@@ -180,7 +200,7 @@ The simulator's Demo team enforces the `.env` and migration rules, so its race s
   1. **Allowlist per tool:** keep only what's needed to understand the call: the command for Bash, the file path for Edit, Write and Read, the URL without its query string for WebFetch, the description for Agent. File contents, edits, prompts, replies and tool output are never stored. MCP and unknown tools keep only their name.
   2. **Scrub secrets** in what's left: Race Control `rc_` tokens, Anthropic, OpenAI, Stripe, GitHub, AWS, Slack and Google keys, JWTs, private-key blocks, credentials in URLs, `Authorization` values, and `password=` / `token:` / `--api-key`-style values all become `[REDACTED]`.
 
-  Paths are stored relative to the session folder, or with the home folder shown as `~`, so usernames aren't stored.
+  Paths are stored relative to the repo's top folder (or the session folder), or with the home folder shown as `~`, so usernames aren't stored. Git remotes are reduced to host and path; credentials in them are removed on the developer's machine and again on the server.
 - **Store metadata, not content.** Keep the command, file path, tool name and outcome. Don't store file contents or diffs in the MVP. Prompts (`UserPromptSubmit`) are not collected.
 - **Tokens:** generate random tokens, store only a hash, show the token once, and allow revoking. Developer tokens look like `rc_<43 chars>` so secret scanners and our own redaction can recognise them. A token belongs to one team; developers manage their own (up to 10 active), leads can see and revoke everyone's. Removing a member deletes their tokens. `last_used_at` is updated at most every 5 minutes.
 - **Team isolation:** every query is scoped by `teamId` from the authenticated token or session. Add tests that prove one team can't read another's data. In the API, a `:teamId` in the URL is only used after the user's membership is confirmed; teams you aren't in answer `404`, exactly like teams that don't exist.
@@ -196,9 +216,9 @@ teams(id, name, created_at)
 users(id, email, name, created_at)
 memberships(team_id, user_id, role: lead|developer)
 dev_tokens(id, team_id, user_id, token_hash, label, last_used_at, revoked_at)
-sessions(id, team_id, user_id, agent: claude_code|codex, agent_session_id, repo_name, cwd,
-         started_at, ended_at, last_event_at, status: active|idle|ended)
-events(id, team_id, session_id, type, tool_name, target, summary, payload_redacted jsonb,
+sessions(id, team_id, user_id, agent: claude_code|codex, agent_session_id, repo_name, repo_key,
+         repo_root, cwd, started_at, ended_at, last_event_at, status: active|idle|ended)
+events(id, team_id, session_id, type, tool_name, target, repo_key, summary, payload_redacted jsonb,
        decision: allow|deny|ask|none|pending, created_at)
 rules(id, team_id, name, tool, pattern, action: block|approve, mode: enforce|shadow, enabled,
       created_by, created_at)
@@ -330,7 +350,7 @@ In F1, the team radio keeps every driver aware of what's happening on track. Rac
 
 This is how agents from different vendors (Claude Code and Codex) coordinate. Notes follow the untrusted-text rules in section 6.
 
-**Open questions:** does Codex have a pre-tool hook that could support Part 1? (Unconfirmed as of 2026-10-27.) How should "the same repo" be detected, by repo name, git remote or `cwd`?
+**Open questions:** does Codex have a pre-tool hook that could support Part 1? (Unconfirmed as of 2026-10-27.) "The same repo" is detected by git remote, falling back to the folder name (section 4).
 
 ### Other differentiators
 

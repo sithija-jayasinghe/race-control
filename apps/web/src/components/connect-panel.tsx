@@ -79,7 +79,9 @@ export function ConnectPanel({ teamId, myUserId }: { teamId: string; myUserId: s
           </div>
           <p className="text-sm text-muted-foreground">
             Add this to <code className="font-mono text-xs text-foreground">{where.file}</code>. {where.note} If the file
-            already has settings, add the <code className="font-mono text-xs">hooks</code> part to it.
+            already has settings, add the <code className="font-mono text-xs">hooks</code> part to it. When a session starts,
+            it asks <code className="font-mono text-xs">git</code> which repo you're in, so it needs git and curl (macOS,
+            Linux, WSL or Git Bash).
           </p>
           {setup.isError && (
             <p role="alert" className="text-sm text-flag-red">

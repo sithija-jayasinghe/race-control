@@ -1,7 +1,8 @@
 import { EDIT_TOOLS, type YellowFlag } from '@race-control/shared';
-import { and, eq, gte, inArray, isNotNull } from 'drizzle-orm';
+import { and, eq, gte, inArray, isNotNull, sql } from 'drizzle-orm';
 import type { DbOrTx } from '../../db/client.ts';
 import { events, sessions, users } from '../../db/schema.ts';
+import { repoNameFromKey } from '../../lib/repo.ts';
 
 /** Two people editing the same file within this window share a yellow flag (docs/SPEC.md, Team Radio). */
 export const YELLOW_FLAG_WINDOW_MS = 30 * 60 * 1000;
@@ -14,6 +15,9 @@ export type Edit = {
   userEmail: string;
   userName: string | null;
   agent: YellowFlag['drivers'][number]['agent'];
+  /** Which repo the file is in (`github.com/org/api` or `local:api`). */
+  repoKey: string | null;
+  /** The session's name for that repo, when the session is still in it. */
   repoName: string | null;
   target: string | null;
   createdAt: Date;
@@ -38,10 +42,11 @@ export function toDriver(edit: Edit): YellowFlag['drivers'][number] {
 export function flagsFromEdits(edits: Edit[], windowMs = YELLOW_FLAG_WINDOW_MS): YellowFlag[] {
   const byFile = new Map<string, { repoName: string; target: string; drivers: Map<string, Edit> }>();
   for (const edit of edits) {
-    // Without a repo name there's no telling whether two paths are the same file.
-    if (!edit.repoName || !edit.target) continue;
-    const id = `${edit.repoName}:${edit.target}`;
-    const file = byFile.get(id) ?? { repoName: edit.repoName, target: edit.target, drivers: new Map<string, Edit>() };
+    // Without a repo there's no telling whether two paths are the same file.
+    if (!edit.repoKey || !edit.target) continue;
+    const id = `${edit.repoKey}:${edit.target}`;
+    const repoName = edit.repoName ?? repoNameFromKey(edit.repoKey);
+    const file = byFile.get(id) ?? { repoName, target: edit.target, drivers: new Map<string, Edit>() };
     const latest = file.drivers.get(edit.userId);
     if (!latest || edit.createdAt > latest.createdAt) file.drivers.set(edit.userId, edit);
     byFile.set(id, file);
@@ -72,7 +77,7 @@ export async function recentEdits(
   db: DbOrTx,
   teamId: string,
   now: Date,
-  file?: { repoName: string; target: string },
+  file?: { repoKey: string; target: string },
 ): Promise<Edit[]> {
   const since = new Date(now.getTime() - YELLOW_FLAG_WINDOW_MS);
   return db
@@ -82,7 +87,8 @@ export async function recentEdits(
       userEmail: users.email,
       userName: users.name,
       agent: sessions.agent,
-      repoName: sessions.repoName,
+      repoKey: events.repoKey,
+      repoName: sql<string | null>`case when ${sessions.repoKey} = ${events.repoKey} then ${sessions.repoName} end`,
       target: events.target,
       createdAt: events.createdAt,
     })
@@ -98,7 +104,7 @@ export async function recentEdits(
         isNotNull(events.target),
         gte(events.createdAt, since),
         file ? eq(events.target, file.target) : undefined,
-        file ? eq(sessions.repoName, file.repoName) : undefined,
+        file ? eq(events.repoKey, file.repoKey) : undefined,
       ),
     )
     .limit(MAX_EDITS);
@@ -109,7 +115,7 @@ export async function findYellowFlags(
   db: DbOrTx,
   teamId: string,
   now: Date,
-  file?: { repoName: string; target: string },
+  file?: { repoKey: string; target: string },
 ): Promise<YellowFlag[]> {
   return flagsFromEdits(await recentEdits(db, teamId, now, file));
 }

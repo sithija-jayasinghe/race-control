@@ -32,7 +32,7 @@ In Formula 1, Race Control watches every car, enforces the rules and decides wha
 | 📡 | **Live team view** | Every active agent session across the team, with a real-time event feed and per-session timelines |
 | 🚩 | **Guardrail rules** | Team rules such as "never edit `.env`" or "no force-push to `main`" that block the agent instantly |
 | ✋ | **Approvals** | Risky actions pause the agent until a team lead approves or denies them, from desktop or phone |
-| ⚡ | **Zero install** | Developers paste a settings snippet. Claude Code's HTTP hooks send events directly, so there's nothing to install |
+| ⚡ | **Zero install** | Developers paste a settings snippet. Claude Code's hooks send events directly (a one-line command asks git which repo it is), so there's nothing to install |
 | 🔒 | **Privacy first** | Secrets are redacted before storage. Commands and file paths are kept, but file contents and prompts are not |
 | 🎬 | **Simulator** | Replays realistic agent sessions, so the demo works without running real agents |
 | 📻 | **Team Radio** | Agents learn what other agents on the team are doing. If another agent just edited a file, yours gets a heads-up before touching it |

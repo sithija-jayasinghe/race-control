@@ -8,7 +8,8 @@ import {
   type TeamRadio,
 } from '@race-control/shared';
 import type { AppDeps } from '../../app.ts';
-import { errorHeadline, hideHome, recordToolCall, redactSecrets, repoNameFromCwd } from '../../lib/redact.ts';
+import { errorHeadline, hideHome, recordToolCall, redactSecrets } from '../../lib/redact.ts';
+import { eventRepo, repoFromCwd, repoFromHeaders, type RepoContext } from '../../lib/repo.ts';
 import { findYellowFlags } from '../flags/repo.ts';
 import { insertApproval } from '../approvals/repo.ts';
 import { holdForApproval } from '../approvals/service.ts';
@@ -21,6 +22,7 @@ import * as repo from './repo.ts';
 /** What each event means for the session's status. */
 const SESSION_STATUS: Record<IngestedHookEvent, SessionStatus> = {
   SessionStart: 'active',
+  CwdChanged: 'active',
   PreToolUse: 'active',
   PostToolUse: 'active',
   PostToolUseFailure: 'active',
@@ -37,8 +39,11 @@ type StoredEvent = {
 
 const clean = (value: string | undefined, max = 100) => (value ? redactSecrets(value).slice(0, max) : undefined);
 
-/** Reduces a hook payload to what may be stored: no file contents, prompts, replies or tool output. */
-function toStoredEvent<E extends IngestedHookEvent>(event: E, payload: HookPayload<E>): StoredEvent {
+/**
+ * Reduces a hook payload to what may be stored: no file contents, prompts, replies or tool output.
+ * File paths are made relative to `base`.
+ */
+function toStoredEvent<E extends IngestedHookEvent>(event: E, payload: HookPayload<E>, base: string | undefined): StoredEvent {
   const shared = {
     permission_mode: clean(payload.permission_mode, 50),
     subagent: clean(payload.agent_type),
@@ -46,7 +51,7 @@ function toStoredEvent<E extends IngestedHookEvent>(event: E, payload: HookPaylo
 
   if (event === 'PreToolUse' || event === 'PostToolUse' || event === 'PostToolUseFailure') {
     const p = payload as HookPayload<'PreToolUse'> & HookPayload<'PostToolUseFailure'>;
-    const call = recordToolCall(p.tool_name, p.tool_input, p.cwd);
+    const call = recordToolCall(p.tool_name, p.tool_input, base);
     return {
       toolName: p.tool_name.slice(0, 200),
       target: call.target,
@@ -104,22 +109,66 @@ async function checkRules(deps: Pick<AppDeps, 'db' | 'rules'>, teamId: string, p
   return evaluateRules(rules, { toolName: payload.tool_name, target, command });
 }
 
+type Deps = Pick<AppDeps, 'db' | 'now' | 'bus' | 'rules' | 'approvals' | 'approvalWaitMs'>;
+
+export type IngestOptions = {
+  /** Aborts a held tool call when the agent hangs up. */
+  signal?: AbortSignal;
+  /** The git top folder and remote, from the session hook's headers. */
+  repoHeaders?: { root?: string; remote?: string };
+};
+
+/** Where the session is now, from the session hook. Without git headers, the folder name stands in. */
+function sessionHookRepo(cwd: string | undefined, headers: IngestOptions['repoHeaders']): RepoContext | null {
+  return repoFromHeaders(headers?.root, headers?.remote, cwd) ?? repoFromCwd(cwd);
+}
+
+/** The agent changed folder: only the session's repo changes. Nothing is shown as a step. */
+async function changeFolder(deps: Deps, auth: DevTokenAuth, payload: HookPayload<'CwdChanged'>, options: IngestOptions) {
+  const cwd = payload.new_cwd ?? payload.cwd;
+  const sessionId = await repo.upsertSession(deps.db, {
+    teamId: auth.teamId,
+    userId: auth.userId,
+    agentSessionId: payload.session_id,
+    cwd: cwd ? hideHome(cwd).slice(0, 1000) : null,
+    repo: sessionHookRepo(cwd, options.repoHeaders),
+    repoUpdate: true,
+    status: 'active',
+    ended: false,
+    now: deps.now(),
+  });
+  const session = await findSessionView(deps.db, auth.teamId, sessionId);
+  if (session) deps.bus.publish(auth.teamId, { type: 'session', session: serializeSession(session) });
+}
+
 /**
  * Records one hook event for the token's team and developer, applying the team's rules to tool calls.
  * A tool call that needs a lead is held here until one decides, the wait runs out, or `signal` aborts.
  * Also returns a Team Radio heads-up when someone else on the team recently edited the file the agent is
  * about to work on.
+ *
+ * Files are matched by repo and path from the repo's top folder. The session hook says which repo the
+ * agent is in (see lib/repo.ts); events in a folder outside it fall back to the folder name.
  */
 export async function ingestHookEvent<E extends IngestedHookEvent>(
-  deps: Pick<AppDeps, 'db' | 'now' | 'bus' | 'rules' | 'approvals' | 'approvalWaitMs'>,
+  deps: Deps,
   auth: DevTokenAuth,
   event: E,
   payload: HookPayload<E>,
-  signal?: AbortSignal,
+  options: IngestOptions = {},
 ): Promise<HookOutcome> {
+  if (event === 'CwdChanged') {
+    await changeFolder(deps, auth, payload, options);
+    return {};
+  }
   const now = deps.now();
-  const stored = toStoredEvent(event, payload);
-  const repoName = repoNameFromCwd(payload.cwd);
+  const repoUpdate = event === 'SessionStart';
+  const known = repoUpdate
+    ? sessionHookRepo(payload.cwd, options.repoHeaders)
+    : await repo.findSessionRepo(deps.db, auth.teamId, payload.session_id);
+  const inRepo = eventRepo(known, payload.cwd);
+  const stored = toStoredEvent(event, payload, inRepo?.root ?? payload.cwd);
+  const repoKey = stored.target ? (inRepo?.key ?? null) : null;
 
   const evaluation: Evaluation =
     event === 'PreToolUse' ? await checkRules(deps, auth.teamId, payload as HookPayload<'PreToolUse'>, stored.target) : { shadow: [] };
@@ -137,7 +186,8 @@ export async function ingestHookEvent<E extends IngestedHookEvent>(
       userId: auth.userId,
       agentSessionId: payload.session_id,
       cwd: payload.cwd ? hideHome(payload.cwd).slice(0, 1000) : null,
-      repoName,
+      repo: repoUpdate ? known : inRepo,
+      repoUpdate,
       status: SESSION_STATUS[event],
       ended: event === 'SessionEnd',
       now,
@@ -145,8 +195,8 @@ export async function ingestHookEvent<E extends IngestedHookEvent>(
     // Team Radio: the heads-up is decided before the event is saved, so the event records that it carried one.
     let about: TeamRadio['about'] = [];
     // A blocked call never touches the file, so it needs no heads-up.
-    if (event === 'PreToolUse' && decision !== 'deny' && stored.target && repoName && radioTools.includes(stored.toolName ?? '')) {
-      about = await findTeamRadio(tx, { teamId: auth.teamId, userId: auth.userId, sessionId, repoName, target: stored.target, now });
+    if (event === 'PreToolUse' && decision !== 'deny' && stored.target && repoKey && radioTools.includes(stored.toolName ?? '')) {
+      about = await findTeamRadio(tx, { teamId: auth.teamId, userId: auth.userId, sessionId, repoKey, target: stored.target, now });
       if (about.length > 0) stored.payload.radio = { about: about.map((d) => ({ userId: d.userId, name: radioName(d) })) };
     }
     const eventId = await repo.insertEvent(tx, {
@@ -155,6 +205,7 @@ export async function ingestHookEvent<E extends IngestedHookEvent>(
       type: event,
       toolName: stored.toolName,
       target: stored.target,
+      repoKey,
       summary: stored.summary,
       payloadRedacted: compact(stored.payload),
       decision,
@@ -185,19 +236,19 @@ export async function ingestHookEvent<E extends IngestedHookEvent>(
   publishEvent(decision);
 
   // An edit may raise or extend a yellow flag on that file.
-  if (event === 'PreToolUse' && decision !== 'deny' && stored.target && session?.repoName && editTools.includes(stored.toolName ?? '')) {
-    const [flag] = await findYellowFlags(deps.db, auth.teamId, now, { repoName: session.repoName, target: stored.target });
+  if (event === 'PreToolUse' && decision !== 'deny' && stored.target && repoKey && editTools.includes(stored.toolName ?? '')) {
+    const [flag] = await findYellowFlags(deps.db, auth.teamId, now, { repoKey, target: stored.target });
     if (flag) deps.bus.publish(auth.teamId, { type: 'flag', flag });
   }
 
   let additionalContext: string | undefined;
-  if (ids.about.length > 0 && stored.target && repoName) {
+  if (ids.about.length > 0 && stored.target && inRepo) {
     deps.bus.publish(auth.teamId, {
       type: 'radio',
       radio: {
         eventId: ids.eventId,
         sessionId: ids.sessionId,
-        repoName,
+        repoName: inRepo.name,
         target: stored.target,
         about: ids.about,
         createdAt: now.toISOString(),
@@ -210,7 +261,12 @@ export async function ingestHookEvent<E extends IngestedHookEvent>(
   if (!ids.approvalId) return { permission: { decision: 'deny', reason: `Blocked by team rule: ${rule.name}` }, additionalContext };
 
   // Pit lane: wait for a lead, then pass on the answer and show it on the dashboard.
-  const permission = await holdForApproval(deps, { teamId: auth.teamId, approvalId: ids.approvalId, ruleName: rule.name, signal });
+  const permission = await holdForApproval(deps, {
+    teamId: auth.teamId,
+    approvalId: ids.approvalId,
+    ruleName: rule.name,
+    signal: options.signal,
+  });
   publishEvent(permission.decision);
   return { permission, additionalContext };
 }
