@@ -75,14 +75,18 @@ export function hideHome(path: string): string {
   return path.replace(/^(?:\/Users|\/home)\/[^/]+(?=\/|$)/, '~').replace(/^[A-Za-z]:\\Users\\[^\\]+(?=\\|$)/i, '~');
 }
 
-/** A file path relative to the session's folder when it's inside it, otherwise with the home folder hidden. */
-export function displayPath(path: string, cwd: string | undefined): string {
-  if (cwd) {
-    const base = cwd.endsWith('/') ? cwd : `${cwd}/`;
-    if (path.startsWith(base)) return path.slice(base.length);
-    if (path === cwd) return '.';
+/**
+ * A file path relative to `base` (the repo's top folder, or the session's folder) when it's inside it,
+ * otherwise with the home folder hidden. Either may already have the home folder hidden.
+ */
+export function displayPath(path: string, base: string | undefined): string {
+  const hidden = hideHome(path);
+  if (base) {
+    const top = hideHome(base).replace(/\/+$/, '');
+    if (hidden === top) return '.';
+    if (hidden.startsWith(`${top}/`)) return hidden.slice(top.length + 1);
   }
-  return hideHome(path);
+  return hidden;
 }
 
 /** The repo a session works in: the last folder of its working directory. */
@@ -121,13 +125,16 @@ function compact(input: Record<string, string | number | boolean | undefined>) {
   >;
 }
 
-/** Keeps only what each tool needs to be understood, redacted. Unknown and MCP tools keep only their name. */
-export function recordToolCall(toolName: string, input: Record<string, unknown>, cwd?: string): ToolCallRecord {
+/**
+ * Keeps only what each tool needs to be understood, redacted. Unknown and MCP tools keep only their name.
+ * File paths are made relative to `base`: the repo's top folder when known, else the session's folder.
+ */
+export function recordToolCall(toolName: string, input: Record<string, unknown>, base?: string): ToolCallRecord {
   const verb = toolName.toLowerCase();
 
   if (FILE_TOOLS.has(toolName)) {
     const rawPath = typeof input.file_path === 'string' ? input.file_path : typeof input.notebook_path === 'string' ? input.notebook_path : undefined;
-    const path = rawPath ? truncate(redactSecrets(displayPath(rawPath, cwd)), 1000) : null;
+    const path = rawPath ? truncate(redactSecrets(displayPath(rawPath, base)), 1000) : null;
     return {
       target: path,
       summary: truncate(path ? `${verb} ${path}` : verb, 160),
@@ -156,7 +163,7 @@ export function recordToolCall(toolName: string, input: Record<string, unknown>,
     case 'Glob':
     case 'Grep': {
       const pattern = cleanText(input.pattern);
-      const path = typeof input.path === 'string' ? displayPath(input.path, cwd) : undefined;
+      const path = typeof input.path === 'string' ? displayPath(input.path, base) : undefined;
       return {
         target: path ?? null,
         summary: truncate(`${verb} ${pattern ?? ''}${path ? ` in ${path}` : ''}`.trim(), 160),

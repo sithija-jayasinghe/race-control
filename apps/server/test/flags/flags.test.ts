@@ -50,7 +50,7 @@ describe('GET /teams/:teamId/flags', () => {
     const [flag, ...rest] = await flags();
 
     expect(rest).toEqual([]);
-    expect(flag).toMatchObject({ id: 'api:src/auth/session.ts', repoName: 'api', target: 'src/auth/session.ts' });
+    expect(flag).toMatchObject({ id: 'local:api:src/auth/session.ts', repoName: 'api', target: 'src/auth/session.ts' });
     // Most recent first, and the flag lasts until the older edit leaves the window.
     expect(flag!.drivers.map((d) => d.userEmail)).toEqual(['dev@example.test', 'lead@example.test']);
     expect(flag!.expiresAt).toBe(new Date(Date.parse('2026-10-28T09:00:00Z') + YELLOW_FLAG_WINDOW_MS).toISOString());
@@ -122,20 +122,21 @@ describe('yellow flags on the live channel', () => {
 
     const sent = mine.filter((m) => m.type === 'flag');
     expect(sent).toHaveLength(1);
-    expect(sent[0]).toMatchObject({ type: 'flag', flag: { id: 'api:src/app.ts' } });
+    expect(sent[0]).toMatchObject({ type: 'flag', flag: { id: 'local:api:src/app.ts', repoName: 'api' } });
     expect(theirs).toEqual([]);
   });
 });
 
 describe('flagsFromEdits', () => {
-  const edit = (sessionId: string, target: string | null, at: number, repoName: string | null = 'api') => ({
+  const edit = (sessionId: string, target: string | null, at: number, repoKey: string | null = 'github.com/org/api') => ({
     sessionId,
     // One person per session here.
     userId: sessionId,
     userEmail: 'a@example.test',
     userName: null,
     agent: 'claude_code' as const,
-    repoName,
+    repoKey,
+    repoName: null,
     target,
     createdAt: new Date(at),
   });

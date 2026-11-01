@@ -1,4 +1,4 @@
-import { hookPayloadSchemas, isIngestedHookEvent } from '@race-control/shared';
+import { hookPayloadSchemas, isIngestedHookEvent, REPO_REMOTE_HEADER, REPO_ROOT_HEADER, repoHeadersSchema } from '@race-control/shared';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { AppDeps } from '../../app.ts';
@@ -49,7 +49,12 @@ export function hookRoutes(app: FastifyInstance, deps: AppDeps) {
       reply.raw.on('close', () => {
         if (!reply.raw.writableFinished) hungUp.abort();
       });
-      const { permission, additionalContext } = await ingestHookEvent(deps, request.devAuth!, event, parsed.data, hungUp.signal);
+      // Only the session hook sends these; a bad value is dropped, never an error.
+      const headers = repoHeadersSchema.parse(request.headers);
+      const { permission, additionalContext } = await ingestHookEvent(deps, request.devAuth!, event, parsed.data, {
+        signal: hungUp.signal,
+        repoHeaders: { root: headers[REPO_ROOT_HEADER], remote: headers[REPO_REMOTE_HEADER] },
+      });
       if (!permission && !additionalContext) return reply.code(200).send();
       return reply.code(200).send({
         hookSpecificOutput: {

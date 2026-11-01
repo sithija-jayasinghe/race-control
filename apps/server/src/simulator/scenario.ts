@@ -1,20 +1,22 @@
-import type { IngestedHookEvent } from '@race-control/shared';
+import { REPO_REMOTE_HEADER, REPO_ROOT_HEADER, type IngestedHookEvent } from '@race-control/shared';
 
 // A scripted race: five demo drivers doing realistic Claude Code work, with the moments the Pit wall
 // is built to show. Times are milliseconds from the start at speed 1.
 
-export type Driver = { code: string; name: string; email: string; repo: string };
+/** `folder`: what they called their clone, when it isn't the repo's name. `remote`: the clone's git remote. */
+export type Driver = { code: string; name: string; email: string; repo: string; folder?: string; remote: string };
 
 export const DEMO_DOMAIN = 'demo.racecontrol.test';
 export const DEMO_TEAM_NAME = 'Demo team';
 export const DEMO_LEAD = { name: 'Demo lead', email: `lead@${DEMO_DOMAIN}` };
 
 export const DRIVERS: Driver[] = [
-  { code: 'NIM', name: 'Nimal', email: `nimal@${DEMO_DOMAIN}`, repo: 'buildflow-api' },
-  { code: 'KAS', name: 'Kasun', email: `kasun@${DEMO_DOMAIN}`, repo: 'buildflow-api' },
-  { code: 'AMA', name: 'Amaya', email: `amaya@${DEMO_DOMAIN}`, repo: 'buildflow-api' },
-  { code: 'RUW', name: 'Ruwan', email: `ruwan@${DEMO_DOMAIN}`, repo: 'buildflow-web' },
-  { code: 'JAN', name: 'Janith', email: `janith@${DEMO_DOMAIN}`, repo: 'buildflow-api' },
+  { code: 'NIM', name: 'Nimal', email: `nimal@${DEMO_DOMAIN}`, repo: 'buildflow-api', remote: 'git@github.com:buildflow/buildflow-api.git' },
+  // Kasun cloned the API into `api`, so only the remote shows he and Nimal share a file.
+  { code: 'KAS', name: 'Kasun', email: `kasun@${DEMO_DOMAIN}`, repo: 'buildflow-api', folder: 'api', remote: 'https://github.com/buildflow/buildflow-api' },
+  { code: 'AMA', name: 'Amaya', email: `amaya@${DEMO_DOMAIN}`, repo: 'buildflow-api', remote: 'git@github.com:buildflow/buildflow-api.git' },
+  { code: 'RUW', name: 'Ruwan', email: `ruwan@${DEMO_DOMAIN}`, repo: 'buildflow-web', remote: 'git@github.com:buildflow/buildflow-web.git' },
+  { code: 'JAN', name: 'Janith', email: `janith@${DEMO_DOMAIN}`, repo: 'buildflow-api', remote: 'git@github.com:buildflow/buildflow-api.git' },
 ];
 
 export type Step = {
@@ -109,11 +111,13 @@ const ABSOLUTE_PATH_KEYS = ['file_path', 'path'];
 /**
  * The race for one lap, sorted by time. Each run and lap gets fresh session ids, like a new Claude Code
  * session, and paths become absolute under each driver's demo folder, the way Claude Code sends them.
+ * Session starts carry the repo headers the snippet's session hook sends.
  */
-export function steps(lap: number, runId = 'run'): Array<Step & { sessionId: string; cwd: string }> {
+export function steps(lap: number, runId = 'run'): Array<Step & { sessionId: string; cwd: string; headers?: Record<string, string> }> {
   return SCRIPT.map((step) => {
     const driver = DRIVERS.find((d) => d.code === step.driver)!;
-    const cwd = `/Users/${driver.name.toLowerCase()}/code/${driver.repo}`;
+    const cwd = `/Users/${driver.name.toLowerCase()}/code/${driver.folder ?? driver.repo}`;
+    const headers = step.event === 'SessionStart' ? { [REPO_ROOT_HEADER]: cwd, [REPO_REMOTE_HEADER]: driver.remote } : undefined;
     const body = { ...step.body };
     if (body.tool_input && typeof body.tool_input === 'object') {
       const input = { ...(body.tool_input as Record<string, unknown>) };
@@ -123,6 +127,6 @@ export function steps(lap: number, runId = 'run'): Array<Step & { sessionId: str
       }
       body.tool_input = input;
     }
-    return { ...step, body, sessionId: `demo-${driver.code.toLowerCase()}-${runId}-lap${lap}`, cwd };
+    return { ...step, body, sessionId: `demo-${driver.code.toLowerCase()}-${runId}-lap${lap}`, cwd, ...(headers ? { headers } : {}) };
   }).sort((a, b) => a.at - b.at);
 }

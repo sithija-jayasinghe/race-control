@@ -5,8 +5,8 @@ import { LAP_MS, steps, type Step } from './scenario.ts';
 /** The HTTP status, plus a rule's decision and a Team Radio heads-up if the reply carried them. */
 export type SendResult = { status: number; decision?: string; reason?: string; radio?: string };
 
-/** Sends one hook event the way Claude Code does. */
-export type Send = (event: IngestedHookEvent, token: string, body: Record<string, unknown>) => Promise<SendResult>;
+/** Sends one hook event the way Claude Code does. `headers`: extra ones, as the session hook sends. */
+export type Send = (event: IngestedHookEvent, token: string, body: Record<string, unknown>, headers?: Record<string, string>) => Promise<SendResult>;
 
 /** Reads a hook reply the way Claude Code does: an empty body is "no decision", JSON may carry context. */
 export function readHookReply(status: number, text: string): SendResult {
@@ -28,10 +28,10 @@ export function readHookReply(status: number, text: string): SendResult {
 /** Real HTTP to a running server's hook endpoint. */
 export function httpSend(baseUrl: string): Send {
   const base = baseUrl.replace(/\/+$/, '');
-  return async (event, token, body) => {
+  return async (event, token, body, headers = {}) => {
     const response = await fetch(`${base}/hooks/${event}`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+      headers: { ...headers, 'content-type': 'application/json', authorization: `Bearer ${token}` },
       body: JSON.stringify(body),
     });
     return readHookReply(response.status, await response.text());
@@ -66,7 +66,7 @@ export function describe(step: Step & { cwd: string }): string {
     if (step.event === 'PreToolUse') return summary;
     return step.event === 'PostToolUse' ? `  ✓ ${summary}` : `  ✗ ${summary}`;
   }
-  return { SessionStart: '● session start', Stop: '■ finished responding', SessionEnd: '○ session ended' }[step.event] ?? step.event;
+  return { SessionStart: '● session start', CwdChanged: '→ changed folder', Stop: '■ finished responding', SessionEnd: '○ session ended' }[step.event] ?? step.event;
 }
 
 function percentile(sorted: number[], p: number) {
@@ -94,10 +94,10 @@ export async function runRace({
   // Drivers waiting in the pit lane, and their steps since, sent in order once a lead answers.
   const held = new Map<string, Promise<void>>();
 
-  const sendStep = async (step: Step & { sessionId: string; cwd: string }, token: string) => {
+  const sendStep = async (step: Step & { sessionId: string; cwd: string; headers?: Record<string, string> }, token: string) => {
     const body = { session_id: step.sessionId, cwd: step.cwd, hook_event_name: step.event, ...step.body };
     const started = now();
-    const { status, decision, reason, radio } = await send(step.event, token, body);
+    const { status, decision, reason, radio } = await send(step.event, token, body, step.headers);
     // A held request's time is the lead's, not the hook's.
     const took = now() - started;
     if (took < holdAfterMs) latencies.push(took);
