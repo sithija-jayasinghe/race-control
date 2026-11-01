@@ -1,6 +1,7 @@
 import { eq, sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import * as schema from '../src/db/schema.ts';
+import { findYellowFlags } from '../src/modules/flags/repo.ts';
 import { describe as describeStep, readHookReply, runRace, type Send } from '../src/simulator/run.ts';
 import { DEMO_TEAM_NAME, DRIVERS, LAP_MS, steps } from '../src/simulator/scenario.ts';
 import { SimulatorSetupError, resetDemo, revokeSimulatorTokens, setupDemoTeam } from '../src/simulator/setup.ts';
@@ -17,11 +18,11 @@ afterEach(async () => {
 });
 
 /** Sends through the real app, like the CLI does over HTTP. */
-const injectSend: Send = async (event, token, body) => {
+const injectSend: Send = async (event, token, body, headers = {}) => {
   const response = await t.app.inject({
     method: 'POST',
     url: `/hooks/${event}`,
-    headers: { authorization: `Bearer ${token}` },
+    headers: { ...headers, authorization: `Bearer ${token}` },
     payload: body,
   });
   return readHookReply(response.statusCode, response.body);
@@ -135,10 +136,14 @@ describe('runRace', () => {
       'JAN  ⛔ deny: Blocked by team rule: Never touch .env files',
       'AMA  ⛔ deny: No approval within 1 second (team rule: Migrations need a lead)',
     ]);
-    // Kasun's agent reads session.ts after Nimal edited it, and hears about it.
+    // Kasun's agent reads session.ts after Nimal edited it, and hears about it. His clone is in a folder
+    // called `api`, so this only works because the repo is matched by its remote.
     expect(lines.filter((l) => l.includes('📻'))).toEqual([
       "KAS  📻 Race Control (team note): Nimal's Claude Code agent edited `src/auth/session.ts` less than a minute ago in another session. Those changes may not be in your copy yet.",
     ]);
+
+    const [flag] = await findYellowFlags(t.db, demo.teamId, t.clock.now());
+    expect(flag).toMatchObject({ id: 'github.com/buildflow/buildflow-api:src/auth/session.ts', repoName: 'buildflow-api' });
 
     await runRace({ send: injectSend, tokens: demo.tokens, laps: 1, speed: 1, ...instantClock(), runId: 'second' });
     expect(await t.db.$count(schema.sessions, eq(schema.sessions.teamId, demo.teamId))).toBe(10);

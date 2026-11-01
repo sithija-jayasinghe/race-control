@@ -64,7 +64,7 @@ export function radioMessage(about: Driver[], target: string, now: Date): string
  */
 export async function findTeamRadio(
   db: DbOrTx,
-  call: { teamId: string; userId: string; sessionId: string; repoName: string; target: string; now: Date },
+  call: { teamId: string; userId: string; sessionId: string; repoKey: string; target: string; now: Date },
 ): Promise<Driver[]> {
   const [heard] = await db
     .select({ id: events.id })
@@ -81,7 +81,7 @@ export async function findTeamRadio(
   if (heard) return [];
 
   const latest = new Map<string, Driver>();
-  for (const edit of await recentEdits(db, call.teamId, call.now, { repoName: call.repoName, target: call.target })) {
+  for (const edit of await recentEdits(db, call.teamId, call.now, { repoKey: call.repoKey, target: call.target })) {
     // Your own agents never get a heads-up about each other.
     if (edit.userId === call.userId) continue;
     const seen = latest.get(edit.userId);
