@@ -21,6 +21,29 @@ const LOCATIONS = {
   },
 } as const;
 
+/** A small two- or three-way switch, like the tabs on a pit board. */
+function Choice<K extends string>({ label, options, value, onChange }: { label: string; options: Record<K, string>; value: K; onChange: (key: K) => void }) {
+  return (
+    <div role="radiogroup" aria-label={label} className="flex w-fit rounded-xl border border-glass-line p-1">
+      {(Object.keys(options) as K[]).map((key) => (
+        <button
+          key={key}
+          type="button"
+          role="radio"
+          aria-checked={value === key}
+          onClick={() => onChange(key)}
+          className={cn('h-8 rounded-lg px-3 text-sm text-muted-foreground', value === key && 'bg-white/10 text-foreground')}
+        >
+          {options[key]}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+const LOCATION_LABELS = { project: LOCATIONS.project.label, user: LOCATIONS.user.label };
+const DOWN_LABELS = { open: 'Carry on', closed: 'Block' };
+
 function Step({ number, done, title, children }: { number: number; done: boolean; title: string; children: ReactNode }) {
   return (
     <li className="flex gap-3">
@@ -46,10 +69,11 @@ export function ConnectPanel({ teamId, myUserId }: { teamId: string; myUserId: s
   const tokens = useTokens(teamId);
   const sessions = useSessions(teamId);
   const [location, setLocation] = useState<keyof typeof LOCATIONS>('project');
+  const [whenDown, setWhenDown] = useState<keyof typeof DOWN_LABELS>('open');
 
   const hasToken = (tokens.data ?? []).some((t) => t.userId === myUserId);
   const mySession = (sessions.data ?? []).find((s) => s.userId === myUserId);
-  const snippet = setup.data ? JSON.stringify(buildHookSettings(setup.data.hooksUrl), null, 2) : '';
+  const snippet = setup.data ? JSON.stringify(buildHookSettings(setup.data.hooksUrl, { failClosed: whenDown === 'closed' }), null, 2) : '';
   const where = LOCATIONS[location];
 
   return (
@@ -63,25 +87,21 @@ export function ConnectPanel({ teamId, myUserId }: { teamId: string; myUserId: s
         </Step>
 
         <Step number={2} done={Boolean(mySession)} title="Add Race Control's hooks">
-          <div role="radiogroup" aria-label="Where to add the hooks" className="flex w-fit rounded-xl border border-glass-line p-1">
-            {(Object.keys(LOCATIONS) as Array<keyof typeof LOCATIONS>).map((key) => (
-              <button
-                key={key}
-                type="button"
-                role="radio"
-                aria-checked={location === key}
-                onClick={() => setLocation(key)}
-                className={cn('h-8 rounded-lg px-3 text-sm text-muted-foreground', location === key && 'bg-white/10 text-foreground')}
-              >
-                {LOCATIONS[key].label}
-              </button>
-            ))}
-          </div>
+          <Choice label="Where to add the hooks" options={LOCATION_LABELS} value={location} onChange={setLocation} />
           <p className="text-sm text-muted-foreground">
             Add this to <code className="font-mono text-xs text-foreground">{where.file}</code>. {where.note} If the file
             already has settings, add the <code className="font-mono text-xs">hooks</code> part to it. When a session starts,
             it asks <code className="font-mono text-xs">git</code> which repo you're in, so it needs git and curl (macOS,
             Linux, WSL or Git Bash).
+          </p>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <span className="text-sm text-muted-foreground">If Race Control is down</span>
+            <Choice label="If Race Control is down" options={DOWN_LABELS} value={whenDown} onChange={setWhenDown} />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {whenDown === 'open'
+              ? 'Agents carry on unchecked until it’s back.'
+              : 'Every tool call is blocked until it’s back, and while a token is missing or revoked. Needs Claude Code 2.1.295 or later.'}
           </p>
           {setup.isError && (
             <p role="alert" className="text-sm text-flag-red">

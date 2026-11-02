@@ -148,9 +148,10 @@ export function ApprovalPage() {
           </div>
         )}
         {data && (
-          <section className="glass overflow-hidden rounded-2xl">
+          // On phones the card fills the screen above the tab bar, so the answer sits in thumb reach.
+          <section className="glass flex flex-col overflow-hidden rounded-2xl max-md:min-h-[calc(100dvh-13rem)]">
             <div className="kerb" style={BLUE_KERB} aria-hidden="true" />
-            <div className="space-y-4 p-5">
+            <div className="flex flex-1 flex-col space-y-4 p-5">
               <div>
                 <h1 className="broadcast text-sm text-flag-blue">Pit lane</h1>
                 {data.status === 'pending' && <Countdown approval={data} className="mt-1 block text-4xl" />}
@@ -170,9 +171,11 @@ export function ApprovalPage() {
                 </p>
               </div>
               {data.status === 'pending' ? (
-                <DecideButtons approval={data} teamId={team.id} canDecide={team.role === 'lead'} stacked decide={decide} />
+                <div className="mt-auto">
+                  <DecideButtons approval={data} teamId={team.id} canDecide={team.role === 'lead'} stacked decide={decide} />
+                </div>
               ) : (
-                <p role="status" className={cn('text-center text-sm', RESULT[data.status].className)}>
+                <p role="status" className={cn('mt-auto text-center text-sm', RESULT[data.status].className)}>
                   {approvalOutcome(data)}
                   <span className="mt-1 block text-xs text-muted-foreground">{decidedLine(data, me.user.id)}</span>
                   <AllowNote decide={decide} teamId={team.id} />

@@ -92,7 +92,7 @@ pnpm dev        # server on :4000, web app on :5173
 
 Any Postgres works: [Postgres.app](https://postgresapp.com) on a Mac, Docker, or a free Neon database. In development there's no email service, so **sign-in links are printed in the server's console**.
 
-To connect your own Claude Code: sign in, create a token in **Settings**, add its `export RACE_CONTROL_TOKEN=…` line to your shell profile, and copy the hook settings from **Connect Claude Code** into your project's `.claude/settings.json`. Your sessions then appear on the Pit wall.
+To connect your own Claude Code: sign in, create a token in **Settings**, add its `export RACE_CONTROL_TOKEN=…` line to your shell profile, and copy the hook settings from **Connect Claude Code** into your project's `.claude/settings.json`. Your sessions then appear on the Pit wall. By default your agent carries on if Race Control is down; pick **Block** under "If Race Control is down" to stop tool calls instead (Claude Code 2.1.295+). With Block, a missing or revoked token also stops every tool call.
 
 | Command | What it does |
 |---|---|
