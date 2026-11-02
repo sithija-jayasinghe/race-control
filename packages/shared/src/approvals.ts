@@ -34,5 +34,16 @@ export type Approval = z.infer<typeof approvalSchema>;
 
 export const approvalParamsSchema = teamParamsSchema.extend({ approvalId: z.uuid() });
 
-export const approvalDecisionSchema = z.object({ decision: z.enum(['approve', 'deny']) });
+export const approvalDecisionSchema = z.object({
+  decision: z.enum(['approve', 'deny']),
+  /** With `approve`: also add a live allow rule for exactly this file or command, so it never waits again. */
+  alwaysAllow: z.boolean().optional(),
+});
 export type ApprovalDecision = z.infer<typeof approvalDecisionSchema>;
+
+export const approvalDecisionResultSchema = z.object({
+  approval: approvalSchema,
+  /** The allow rule "Always allow this" added. Null if none was asked for, or none could be added. */
+  allowRule: z.object({ id: z.uuid(), name: z.string() }).nullable(),
+});
+export type ApprovalDecisionResult = z.infer<typeof approvalDecisionResultSchema>;

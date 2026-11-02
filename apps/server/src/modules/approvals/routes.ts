@@ -1,4 +1,4 @@
-import { approvalDecisionSchema, approvalParamsSchema, approvalSchema, errorResponseSchema, teamParamsSchema } from '@race-control/shared';
+import { approvalDecisionResultSchema, approvalDecisionSchema, approvalParamsSchema, approvalSchema, errorResponseSchema, teamParamsSchema } from '@race-control/shared';
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
@@ -43,14 +43,14 @@ export function approvalRoutes(app: FastifyInstance, deps: AppDeps) {
       schema: {
         params: approvalParamsSchema,
         body: approvalDecisionSchema,
-        response: { 200: approvalSchema, 409: errorResponseSchema, ...errorResponses },
+        response: { 200: approvalDecisionResultSchema, 409: errorResponseSchema, ...errorResponses },
       },
     },
     async (request, reply) => {
-      const result = await decideApproval(deps, getTeamAuth(request), request.params.approvalId, request.body.decision);
+      const result = await decideApproval(deps, getTeamAuth(request), request.params.approvalId, request.body);
       if (result === 'not_found') return reply.code(404).send({ error: 'not_found' });
       if (result === 'already_decided') return reply.code(409).send({ error: 'already_decided' });
-      return result.approval;
+      return result;
     },
   );
 }

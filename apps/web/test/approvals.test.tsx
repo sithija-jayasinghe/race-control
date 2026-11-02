@@ -52,6 +52,60 @@ describe('the pit lane card', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Another lead answered first.');
   });
 
+  it('lets a lead always allow that exact file', async () => {
+    const server = fakeServer({ signedIn: true });
+    const waiting = approval();
+    server.state.approvals.set(TEAM.id, [waiting]);
+    renderApp(`/t/${TEAM.id}`);
+
+    const card = await pitLane();
+    await userEvent.click(within(card).getByRole('checkbox', { name: 'Always allow this' }));
+    await userEvent.click(within(card).getByRole('button', { name: 'Approve' }));
+
+    expect(server.callsTo(`POST /teams/${TEAM.id}/approvals/${waiting.id}/decision`)[0]?.body).toEqual({ decision: 'approve', alwaysAllow: true });
+    expect(await within(card).findByRole('status')).toHaveTextContent('Approved. Amaya’s agent carries on.Goes straight through from now on. Rules');
+  });
+
+  it('never sends Always allow with a deny', async () => {
+    const server = fakeServer({ signedIn: true });
+    const waiting = approval();
+    server.state.approvals.set(TEAM.id, [waiting]);
+    renderApp(`/t/${TEAM.id}`);
+
+    const card = await pitLane();
+    await userEvent.click(within(card).getByRole('checkbox', { name: 'Always allow this' }));
+    await userEvent.click(within(card).getByRole('button', { name: 'Deny' }));
+
+    expect(server.callsTo(`POST /teams/${TEAM.id}/approvals/${waiting.id}/decision`)[0]?.body).toEqual({ decision: 'deny' });
+  });
+
+  it('says so when no allow rule could be added', async () => {
+    const server = fakeServer({ signedIn: true });
+    const waiting = approval();
+    server.state.approvals.set(TEAM.id, [waiting]);
+    server.on(`POST /teams/${TEAM.id}/approvals/${waiting.id}/decision`, () => ({
+      status: 200,
+      body: { approval: { ...waiting, status: 'approved', decidedAt: new Date().toISOString(), decidedBy: { userId: USER.id, name: 'lead' } }, allowRule: null },
+    }));
+    renderApp(`/t/${TEAM.id}`);
+
+    const card = await pitLane();
+    await userEvent.click(within(card).getByRole('checkbox', { name: 'Always allow this' }));
+    await userEvent.click(within(card).getByRole('button', { name: 'Approve' }));
+
+    expect(await within(card).findByText('No allow rule added: the team has 100 rules.')).toBeInTheDocument();
+  });
+
+  it('offers Always allow only for one exact file or command', async () => {
+    const server = fakeServer({ signedIn: true });
+    server.state.approvals.set(TEAM.id, [approval({ toolName: 'Bash', target: 'npm publish && rm -rf dist' })]);
+    renderApp(`/t/${TEAM.id}`);
+
+    const card = await screen.findByRole('region', { name: 'Pit lane: Amaya wants to run' });
+    expect(within(card).getByRole('button', { name: 'Approve' })).toBeInTheDocument();
+    expect(within(card).queryByRole('checkbox')).not.toBeInTheDocument();
+  });
+
   it('shows developers that a lead decides', async () => {
     const server = fakeServer({ signedIn: true, role: 'developer' });
     server.state.approvals.set(TEAM.id, [approval()]);
@@ -108,6 +162,7 @@ describe('the phone approval screen', () => {
     expect(screen.getByRole('timer')).toHaveTextContent(/^3:5\d$/);
     expect(screen.getAllByRole('button', { name: /^(Approve|Deny)$/ }).map((b) => b.textContent)).toEqual(['Approve', 'Deny']);
 
+    expect(screen.getByRole('checkbox', { name: 'Always allow this' })).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Approve' }));
 
     expect(await screen.findByRole('status')).toHaveTextContent(/Approved\. Amaya’s agent carries on\.approved by you/);

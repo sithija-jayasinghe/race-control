@@ -1,5 +1,5 @@
 import { posix } from 'node:path';
-import type { RuleAction, RuleMode } from '@race-control/shared';
+import { commandParts, type RuleAction, type RuleMode } from '@race-control/shared';
 
 // Rule matching (SPEC section 5). Patterns are wildcards, never user-written regular expressions, and
 // are matched by a small dynamic-programming loop that takes time proportional to pattern × text, so
@@ -18,9 +18,6 @@ export type MatchableRule = {
 
 /** What a tool call is matched on: the repo-relative path for file tools, the raw command for Bash. */
 export type ToolCall = { toolName: string; target: string | null; command: string | null };
-
-/** Commands longer than this are matched on their start only. */
-const MAX_COMMAND = 10_000;
 
 type Token =
   | { kind: 'char'; char: string }
@@ -92,15 +89,6 @@ export function wildcardMatch(pattern: string, text: string, path: boolean): boo
   return reach[n] === 1;
 }
 
-/** The commands in a chain: `a && b || c; d | e` and separate lines are each checked on their own. */
-export function commandParts(command: string): string[] {
-  return command
-    .slice(0, MAX_COMMAND)
-    .split(/&&|\|\||[;|\n]/)
-    .map((part) => part.trim())
-    .filter(Boolean);
-}
-
 function toolMatches(ruleTool: string, toolName: string): boolean {
   return ruleTool.split('|').some((tool) => {
     const name = tool.trim();
@@ -108,13 +96,17 @@ function toolMatches(ruleTool: string, toolName: string): boolean {
   });
 }
 
+/** What a rule's pattern is checked against: each command in a Bash chain, or the one file. */
+function subjects(call: ToolCall): { texts: string[]; path: boolean } {
+  if (call.toolName === 'Bash') return { texts: call.command === null ? [] : commandParts(call.command), path: false };
+  // `src/../.env` is still `.env`.
+  return { texts: call.target === null ? [] : [posix.normalize(call.target)], path: true };
+}
+
 export function ruleMatches(rule: MatchableRule, call: ToolCall): boolean {
   if (!rule.enabled || !toolMatches(rule.tool, call.toolName)) return false;
-  if (call.toolName === 'Bash') {
-    return call.command !== null && commandParts(call.command).some((part) => wildcardMatch(rule.pattern, part, false));
-  }
-  // `src/../.env` is still `.env`.
-  return call.target !== null && wildcardMatch(rule.pattern, posix.normalize(call.target), true);
+  const { texts, path } = subjects(call);
+  return texts.some((text) => wildcardMatch(rule.pattern, text, path));
 }
 
 export type Evaluation<R extends MatchableRule = MatchableRule> = {
@@ -124,14 +116,25 @@ export type Evaluation<R extends MatchableRule = MatchableRule> = {
   enforced?: R;
 };
 
+const oldestFirst = (a: MatchableRule, b: MatchableRule) => a.createdAt.getTime() - b.createdAt.getTime();
+
 /**
- * Checks a tool call against a team's rules. Of the enforced rules that match, a block always wins over an
- * approval; otherwise the oldest rule decides.
+ * Checks a tool call against a team's rules. Of the enforced rules that match, a block always wins. Then
+ * an approval is needed for any command in a chain (or the file) that an approve rule matches and no allow
+ * rule does, so allowing `npm test` never lets `npm test && npm publish` through. Otherwise an allow rule
+ * decides. Within each action the oldest rule wins.
  */
 export function evaluateRules<R extends MatchableRule>(rules: R[], call: ToolCall): Evaluation<R> {
-  const matched = rules.filter((rule) => ruleMatches(rule, call));
-  const enforced = matched
-    .filter((rule) => rule.mode === 'enforce')
-    .sort((a, b) => (a.action === b.action ? a.createdAt.getTime() - b.createdAt.getTime() : a.action === 'block' ? -1 : 1))[0];
-  return { shadow: matched.filter((rule) => rule.mode === 'shadow'), enforced };
+  const matched = rules.filter((rule) => ruleMatches(rule, call)).sort(oldestFirst);
+  const shadow = matched.filter((rule) => rule.mode === 'shadow');
+  const enforced = matched.filter((rule) => rule.mode === 'enforce');
+
+  const block = enforced.find((rule) => rule.action === 'block');
+  if (block) return { shadow, enforced: block };
+
+  const allows = enforced.filter((rule) => rule.action === 'allow');
+  const { texts, path } = subjects(call);
+  const uncovered = texts.filter((text) => !allows.some((rule) => wildcardMatch(rule.pattern, text, path)));
+  const approve = enforced.find((rule) => rule.action === 'approve' && uncovered.some((text) => wildcardMatch(rule.pattern, text, path)));
+  return { shadow, enforced: approve ?? allows[0] };
 }

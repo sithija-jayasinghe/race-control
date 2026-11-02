@@ -56,17 +56,17 @@ Each status always has a word as well as a colour, so it never relies on colour 
 
 ## Rules page
 
-- **Test lane** at the top: type a file path or a command (anything with a space) and the server says what would happen: "● Stopped by …", "● Pit lane: … needs a lead" or "Goes through", plus the shadow rules it would trip. Matching rows light up with a red or blue edge.
-- **Rows:** a tower-style tag, **STOP** (block, red) or **PIT** (needs a lead, blue), then the name and the tools and pattern in mono. Shadow rules are ghosts: dashed tag, dimmed name. A rule that's off is struck through. Seven small bars show how often it matched each day for the last week (hidden on phones), then a **Shadow / Live** switch and an on/off switch. On phones the controls take a second line.
+- **Test lane** at the top: type a file path or a command (anything with a space) and the server says what would happen: "● Stopped by …", "● Pit lane: … needs a lead", "● Goes through: allowed by …" or "Goes through", plus the shadow rules it would trip. Matching rows light up with a red, blue or green edge.
+- **Rows:** a tower-style tag, **STOP** (block, red), **PIT** (needs a lead, blue) or **GO** (allow, green), then the name and the tools and pattern in mono. Shadow rules are ghosts: dashed tag, dimmed name. A rule that's off is struck through. Seven small bars show how often it matched each day for the last week (hidden on phones), then a **Shadow / Live** switch and an on/off switch. On phones the controls take a second line.
 - **Drawer** (leads): kerb stripe, the name typed as a heading, **Stop / Pit**, tool chips (Edit, Write, Bash, Any), the pattern, and a live "would have caught n in the last 7 days" with real, redacted examples. New rules are saved with **Add in shadow**; clicking a rule's name edits it in the same drawer.
 - Rules are turned off, never deleted. Developers see everything without the controls. A team with no rules offers its lead the five starter rules.
 - The spec and code say `enforce`; the page says **Live**.
 
 ## Approvals
 
-- **Pit lane card** on the Pit wall, bottom left (full width above the tab bar on phones): blue kerb, "PIT LANE" and a countdown to auto-deny, "**Amaya** wants to write", the file or command in mono, the rule and repo, a draining blue bar, then **Deny** and **Approve**. It shows the oldest waiting approval, with "+n waiting" linking to the queue. After an answer the card says what happened for a moment ("Approved. Amaya's agent carries on."). Developers see "Waiting for a lead" instead of the buttons. While it shows, the Team Radio card steps aside on screens narrower than 1280 px.
+- **Pit lane card** on the Pit wall, bottom left (full width above the tab bar on phones): blue kerb, "PIT LANE" and a countdown to auto-deny, "**Amaya** wants to write", the file or command in mono, the rule and repo, a draining blue bar, then **Deny** and **Approve**. Below them, leads get a small **Always allow this** tick box (green when ticked) when the call is one exact file or command; approving with it ticked adds a live GO rule, and the outcome adds "Goes straight through from now on" with a link to Rules. It shows the oldest waiting approval, with "+n waiting" linking to the queue. After an answer the card says what happened for a moment ("Approved. Amaya's agent carries on."). Developers see "Waiting for a lead" instead of the buttons. While it shows, the Team Radio card steps aside on screens narrower than 1280 px.
 - **Approvals page** (`/approvals`): the pit lane (waiting, with a clock and the buttons on each row), then "Last 24 hours" as **GO** (approved), **STOP** (denied) and **OUT** (no answer), with who answered and when. Answered rows open the session's timeline.
-- **Phone screen** (`/approvals/:id`, from the card's "Pit lane" link or a queue row): the clock big, the target unclipped, and **Approve** above **Deny** in thumb reach.
+- **Phone screen** (`/approvals/:id`, from the card's "Pit lane" link or a queue row): the clock big, the target unclipped, and **Approve** above **Deny** in thumb reach, with the same tick box under them.
 - The nav item has a blue badge with the number waiting.
 
 ## Layout

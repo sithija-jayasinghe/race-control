@@ -25,7 +25,7 @@ export const EVENT_DECISIONS = ['allow', 'deny', 'ask', 'none', 'pending'] as co
 export const eventDecisionSchema = z.enum(EVENT_DECISIONS);
 export type EventDecision = z.infer<typeof eventDecisionSchema>;
 
-export const RULE_ACTIONS = ['block', 'approve'] as const;
+export const RULE_ACTIONS = ['block', 'approve', 'allow'] as const;
 export const ruleActionSchema = z.enum(RULE_ACTIONS);
 export type RuleAction = z.infer<typeof ruleActionSchema>;
 

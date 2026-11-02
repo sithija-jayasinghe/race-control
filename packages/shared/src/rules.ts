@@ -79,8 +79,8 @@ export type RuleWithStats = z.infer<typeof ruleWithStatsSchema>;
 export const ruleTestRequestSchema = z.object({ input: z.string().trim().min(1).max(2000) });
 
 export const ruleTestResultSchema = z.object({
-  /** What Race Control would answer: `none` lets it through. */
-  decision: z.enum(['none', 'deny', 'ask']),
+  /** What Race Control would do: `none` and `allow` let it through, `allow` because a rule says so. */
+  decision: z.enum(['none', 'allow', 'deny', 'ask']),
   /** The enforced rule that decides. */
   ruleId: z.uuid().nullable(),
   /** Shadow rules that would have matched. */
@@ -97,3 +97,27 @@ export const rulePreviewSchema = z.object({
   examples: z.array(z.string()),
 });
 export type RulePreview = z.infer<typeof rulePreviewSchema>;
+
+/** Commands longer than this are matched on their start only. */
+const MAX_COMMAND = 10_000;
+
+/** The commands in a chain: `a && b || c; d | e` and separate lines are each checked on their own. */
+export function commandParts(command: string): string[] {
+  return command
+    .slice(0, MAX_COMMAND)
+    .split(/&&|\|\||[;|\n]/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+/**
+ * The pattern "Always allow this" would add for a held tool call: exactly that file or command, with no
+ * wildcards. Null when nothing exact can be allowed: no target, a redacted secret, a `*` or `?` that would
+ * act as a wildcard, a chain of commands, or more than a rule can hold.
+ */
+export function alwaysAllowPattern(call: { toolName: string | null; target: string | null }): string | null {
+  const { target } = call;
+  if (!target || target.includes('[REDACTED]') || /[*?]/.test(target)) return null;
+  if (call.toolName === 'Bash' && (commandParts(target).length !== 1 || commandParts(target)[0] !== target)) return null;
+  return ruleInputSchema.shape.pattern.safeParse(target).data === target ? target : null;
+}

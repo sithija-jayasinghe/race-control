@@ -113,6 +113,27 @@ describe('rules on PreToolUse', () => {
     expect(JSON.stringify(await t.db.select().from(schema.events))).not.toContain('sk_live_51');
   });
 
+  it('answers nothing for an allow rule, leaving Claude Code to ask as usual, and records it', async () => {
+    await setRule('Migrations need a lead', { mode: 'enforce' });
+    await lead.request('POST', `/teams/${teamId}/rules`, { name: 'Seed data is fine', tool: 'Edit', pattern: 'db/migrations/seed.sql', action: 'allow' });
+    await setRule('Seed data is fine', { mode: 'enforce' });
+
+    expect((await editFile('db/migrations/seed.sql')).body).toBe('');
+    const event = await lastEvent();
+    expect(event.decision).toBe('none');
+    expect(event.payloadRedacted).toMatchObject({ rule: { name: 'Seed data is fine', action: 'allow' } });
+    const timeline = (await lead.request('GET', `/teams/${teamId}/sessions/${event.sessionId}`)).json<SessionTimeline>();
+    expect(timeline.events.at(-1)?.detail).toBe('Allowed by rule: Seed data is fine');
+  });
+
+  it('never lets an allow rule beat a block', async () => {
+    await setRule('Never touch .env files', { mode: 'enforce' });
+    await lead.request('POST', `/teams/${teamId}/rules`, { name: 'Env is fine', tool: '*', pattern: '.env', action: 'allow' });
+    await setRule('Env is fine', { mode: 'enforce' });
+
+    expect((await editFile('.env')).json()).toMatchObject({ hookSpecificOutput: { permissionDecision: 'deny' } });
+  });
+
   it('ignores disabled rules', async () => {
     await setRule('Never touch .env files', { mode: 'enforce', enabled: false });
 

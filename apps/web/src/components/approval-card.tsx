@@ -1,8 +1,8 @@
-import type { Approval } from '@race-control/shared';
-import type { CSSProperties } from 'react';
+import { alwaysAllowPattern, MAX_RULES, type Approval } from '@race-control/shared';
+import { useState, type CSSProperties } from 'react';
 import { Link } from 'react-router';
 import { ApiError } from '@/lib/api';
-import { approvalVerb, approvalWho, clock, useCountdown, useDecide } from '@/lib/approvals';
+import { approvalVerb, approvalWho, clock, useCountdown, useDecide, type Decide } from '@/lib/approvals';
 import { cn } from '@/lib/utils';
 
 const BLUE_KERB = { '--kerb': 'var(--flag-blue)' } as CSSProperties;
@@ -37,28 +37,53 @@ function decideError(error: unknown): string {
   return error instanceof ApiError && error.status === 409 ? 'Another lead answered first.' : 'Couldn’t send that. Try again.';
 }
 
+/** After "Always allow this": whether the allow rule went in. */
+export function AllowNote({ decide, teamId }: { decide: Decide; teamId: string }) {
+  if (!decide.data || !decide.variables?.alwaysAllow) return null;
+  return (
+    <span className="mt-1 block text-xs text-muted-foreground">
+      {decide.data.allowRule ? (
+        <>
+          Goes straight through from now on.{' '}
+          <Link to={`/t/${teamId}/rules`} className="underline underline-offset-2 hover:text-foreground">
+            Rules
+          </Link>
+        </>
+      ) : (
+        `No allow rule added: the team has ${MAX_RULES} rules.`
+      )}
+    </span>
+  );
+}
+
 /**
  * Deny and Approve for leads; everyone else waits for one. `stacked` puts Approve on top, for thumbs on a phone.
+ * Leads can tick "Always allow this" when the call is one exact file or command. Pass `decide` to read the
+ * answer after these buttons are gone.
  */
 export function DecideButtons({
   approval,
   teamId,
   canDecide,
   stacked = false,
+  decide: shared,
 }: {
   approval: Approval;
   teamId: string;
   canDecide: boolean;
   stacked?: boolean;
+  decide?: Decide;
 }) {
-  const decide = useDecide(teamId);
+  const own = useDecide(teamId);
+  const decide = shared ?? own;
+  const [always, setAlways] = useState(false);
   if (!canDecide) return <p className="py-2 text-center text-sm text-muted-foreground">Waiting for a lead</p>;
 
   const button = (decision: 'approve' | 'deny') => (
     <button
       type="button"
       disabled={decide.isPending}
-      onClick={() => decide.mutate({ approvalId: approval.id, decision })}
+      onClick={() => decide.mutate({ approvalId: approval.id, decision, ...(decision === 'approve' && always ? { alwaysAllow: true } : {}) })}
       className={cn(
         'rounded-[10px] border text-sm disabled:opacity-60',
         stacked ? 'py-3.5' : 'py-2',
@@ -74,6 +99,18 @@ export function DecideButtons({
         {stacked ? button('approve') : button('deny')}
         {stacked ? button('deny') : button('approve')}
       </div>
+      {alwaysAllowPattern(approval) && (
+        <label className={cn('mt-2 flex cursor-pointer items-center justify-center gap-2 text-xs text-muted-foreground has-checked:text-flag-green', stacked && 'py-1.5')}>
+          <input
+            type="checkbox"
+            checked={always}
+            disabled={decide.isPending}
+            onChange={(e) => setAlways(e.target.checked)}
+            className="size-3.5 accent-[var(--flag-green)]"
+          />
+          Always allow this
+        </label>
+      )}
       {decide.isError && (
         <p role="alert" className="mt-2 text-center text-xs text-flag-red">
           {decideError(decide.error)}
@@ -99,6 +136,7 @@ export function ApprovalCard({
   className?: string;
 }) {
   const who = approvalWho(approval);
+  const decide = useDecide(teamId);
   const settled = approval.status !== 'pending';
   const seconds = useCountdown(approval.expiresAt);
   const total = (Date.parse(approval.expiresAt) - Date.parse(approval.requestedAt)) / 1000;
@@ -142,6 +180,7 @@ export function ApprovalCard({
             )}
           >
             {approvalOutcome(approval)}
+            <AllowNote decide={decide} teamId={teamId} />
           </p>
         ) : (
           <>
@@ -151,7 +190,7 @@ export function ApprovalCard({
                 style={{ width: `${total > 0 ? (seconds / total) * 100 : 0}%` }}
               />
             </div>
-            <DecideButtons approval={approval} teamId={teamId} canDecide={canDecide} />
+            <DecideButtons approval={approval} teamId={teamId} canDecide={canDecide} decide={decide} />
           </>
         )}
       </div>

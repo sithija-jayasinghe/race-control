@@ -1,6 +1,7 @@
 import { STARTER_RULES } from '@race-control/shared';
 import { describe, expect, it } from 'vitest';
-import { commandParts, evaluateRules, ruleMatches, wildcardMatch, type MatchableRule } from '../../src/modules/rules/match.ts';
+import { commandParts } from '@race-control/shared';
+import { evaluateRules, ruleMatches, wildcardMatch, type MatchableRule } from '../../src/modules/rules/match.ts';
 
 let nextId = 0;
 function rule(overrides: Partial<MatchableRule> = {}): MatchableRule {
@@ -136,6 +137,37 @@ describe('evaluateRules', () => {
     const block = rule({ action: 'block' });
 
     expect(evaluateRules([approve, block], edit('a.ts')).enforced).toBe(block);
+  });
+
+  it('puts a block first, then an allow over the approval it covers', () => {
+    const allow = rule({ action: 'allow' });
+    const approve = rule({ action: 'approve' });
+    const block = rule({ action: 'block' });
+
+    expect(evaluateRules([allow, approve, block], edit('a.ts')).enforced).toBe(block);
+    expect(evaluateRules([approve, allow], edit('a.ts')).enforced).toBe(allow);
+    expect(evaluateRules([rule({ action: 'allow', pattern: 'b.ts' }), approve], edit('a.ts')).enforced).toBe(approve);
+  });
+
+  it('lets an allow rule pass what an approve rule would hold, file by file and command by command', () => {
+    const migrations = rule({ action: 'approve', pattern: '**/migrations/**' });
+    const one = rule({ action: 'allow', pattern: 'db/migrations/0042.sql' });
+    expect(evaluateRules([migrations, one], edit('db/migrations/0042.sql')).enforced).toBe(one);
+    expect(evaluateRules([migrations, one], edit('db/migrations/0043.sql')).enforced).toBe(migrations);
+
+    // Allowing one command in a chain never lets the rest through.
+    const publish = rule({ action: 'approve', tool: 'Bash', pattern: 'npm publish*' });
+    const dryRun = rule({ action: 'allow', tool: 'Bash', pattern: 'npm publish --dry-run' });
+    expect(evaluateRules([publish, dryRun], bash('npm publish --dry-run')).enforced).toBe(dryRun);
+    expect(evaluateRules([publish, dryRun], bash('npm publish --dry-run && npm publish')).enforced).toBe(publish);
+    expect(evaluateRules([publish, dryRun], bash('npm test && npm publish --dry-run')).enforced).toBe(dryRun);
+  });
+
+  it('never lets a shadow or disabled allow rule pass anything', () => {
+    const approve = rule({ action: 'approve' });
+
+    expect(evaluateRules([approve, rule({ action: 'allow', mode: 'shadow' })], edit('a.ts')).enforced).toBe(approve);
+    expect(evaluateRules([approve, rule({ action: 'allow', enabled: false })], edit('a.ts')).enforced).toBe(approve);
   });
 
   it('decides nothing when only shadow rules, or no rules, match', () => {

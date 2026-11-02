@@ -36,7 +36,11 @@ export function chipsToTool(chips: ChipKey[], extra: string[] = []): string {
 const FLAG = {
   block: { tag: 'STOP', word: 'Block', text: 'text-flag-red', fill: 'bg-flag-red/15', border: 'border-flag-red', edge: 'shadow-[inset_3px_0_0_var(--flag-red)]' },
   approve: { tag: 'PIT', word: 'Needs a lead', text: 'text-flag-blue', fill: 'bg-flag-blue/15', border: 'border-flag-blue', edge: 'shadow-[inset_3px_0_0_var(--flag-blue)]' },
+  allow: { tag: 'GO', word: 'Allow', text: 'text-flag-green', fill: 'bg-flag-green/15', border: 'border-flag-green', edge: 'shadow-[inset_3px_0_0_var(--flag-green)]' },
 } as const;
+
+const ACTION_WORD = { block: 'Stop', approve: 'Pit', allow: 'Go' } as const;
+const BAR = { block: 'bg-flag-red', approve: 'bg-flag-blue', allow: 'bg-flag-green' } as const;
 
 function Tag({ rule }: { rule: RuleWithStats }) {
   const flag = FLAG[rule.action];
@@ -68,7 +72,7 @@ function Spark({ rule }: { rule: RuleWithStats }) {
         {rule.matches.map((count, i) => (
           <i
             key={i}
-            className={cn('w-[5px] rounded-[1px]', count === 0 ? 'bg-white/10' : rule.mode === 'shadow' ? 'bg-muted-foreground' : rule.action === 'block' ? 'bg-flag-red' : 'bg-flag-blue')}
+            className={cn('w-[5px] rounded-[1px]', count === 0 ? 'bg-white/10' : rule.mode === 'shadow' ? 'bg-muted-foreground' : BAR[rule.action])}
             style={{ height: 2 + (count / max) * 14 }}
           />
         ))}
@@ -191,6 +195,11 @@ function Verdict({ result, rules }: { result: RuleTestResult | undefined; rules:
           <span className="text-flag-blue">● Pit lane</span>: {name(result.ruleId)} needs a lead
         </>
       )}
+      {result.decision === 'allow' && (
+        <>
+          <span className="text-flag-green">● Goes through</span>: allowed by {name(result.ruleId)}
+        </>
+      )}
       {result.decision === 'none' && 'Goes through'}
       {shadow.length > 0 && <span> · Shadow: {shadow.join(', ')}</span>}
     </>
@@ -249,8 +258,8 @@ function Drawer({ draft: initial, teamId, onClose }: { draft: Draft; teamId: str
           </button>
         </div>
         <div className="flex flex-wrap items-center gap-2.5">
-          <div role="radiogroup" aria-label="What it does" className="flex w-[170px] overflow-hidden rounded-md border border-white/12">
-            {(['block', 'approve'] as const).map((action) => (
+          <div role="radiogroup" aria-label="What it does" className="flex w-[210px] overflow-hidden rounded-md border border-white/12">
+            {(['block', 'approve', 'allow'] as const).map((action) => (
               <button
                 key={action}
                 type="button"
@@ -259,7 +268,7 @@ function Drawer({ draft: initial, teamId, onClose }: { draft: Draft; teamId: str
                 onClick={() => set({ action })}
                 className={cn('broadcast flex-1 py-1.5 text-[11px] text-muted-foreground', draft.action === action && `bg-white/12 ${FLAG[action].text}`)}
               >
-                <span aria-hidden="true">{action === 'block' ? 'Stop' : 'Pit'}</span>
+                <span aria-hidden="true">{ACTION_WORD[action]}</span>
                 <span className="sr-only">{FLAG[action].word}</span>
               </button>
             ))}

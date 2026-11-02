@@ -102,7 +102,7 @@ describe('POST /teams/:teamId/rules', () => {
     ['a tool with spaces', { tool: 'Edit Write' }],
     ['a control character', { pattern: 'a\u0000b' }],
     ['a long pattern', { pattern: 'x'.repeat(301) }],
-    ['an unknown action', { action: 'allow' }],
+    ['an unknown action', { action: 'pass' }],
   ])('rejects %s', async (_name, change) => {
     expect((await lead.request('POST', `/teams/${teamId}/rules`, { ...newRule, ...change })).statusCode).toBe(400);
   });

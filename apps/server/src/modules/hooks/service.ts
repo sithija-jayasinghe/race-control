@@ -173,7 +173,8 @@ export async function ingestHookEvent<E extends IngestedHookEvent>(
   const evaluation: Evaluation =
     event === 'PreToolUse' ? await checkRules(deps, auth.teamId, payload as HookPayload<'PreToolUse'>, stored.target) : { shadow: [] };
   const rule = evaluation.enforced;
-  const decision: EventDecision = !rule ? 'none' : rule.action === 'block' ? 'deny' : 'pending';
+  // An allow rule answers nothing: Claude Code's own permission settings still apply.
+  const decision: EventDecision = rule?.action === 'block' ? 'deny' : rule?.action === 'approve' ? 'pending' : 'none';
   if (rule) stored.payload.rule = { id: rule.id, name: rule.name, action: rule.action };
   // Shadow mode: record what a rule would have caught, and change nothing.
   if (evaluation.shadow.length > 0) {
@@ -257,7 +258,7 @@ export async function ingestHookEvent<E extends IngestedHookEvent>(
     additionalContext = radioMessage(ids.about, stored.target, now);
   }
 
-  if (!rule) return { additionalContext };
+  if (!rule || rule.action === 'allow') return { additionalContext };
   if (!ids.approvalId) return { permission: { decision: 'deny', reason: `Blocked by team rule: ${rule.name}` }, additionalContext };
 
   // Pit lane: wait for a lead, then pass on the answer and show it on the dashboard.
