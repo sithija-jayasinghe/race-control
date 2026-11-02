@@ -100,7 +100,7 @@ export function DecideButtons({
         {stacked ? button('deny') : button('approve')}
       </div>
       {alwaysAllowPattern(approval) && (
-        <label className={cn('mt-2 flex cursor-pointer items-center justify-center gap-2 text-xs text-muted-foreground has-checked:text-flag-green', stacked && 'py-1.5')}>
+        <label className={cn('mt-2 flex cursor-pointer items-center justify-center gap-2 text-xs text-muted-foreground has-checked:text-flag-green', stacked && 'py-3')}>
           <input
             type="checkbox"
             checked={always}

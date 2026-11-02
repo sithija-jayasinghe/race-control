@@ -29,6 +29,15 @@ describe('buildHookSettings', () => {
     expect(settings.hooks.SessionEnd[0]!.hooks[0]).not.toHaveProperty('timeout');
   });
 
+  it('lets tool calls carry on when Race Control is down, unless the team picks fail-closed', () => {
+    expect(JSON.stringify(settings)).not.toContain('onFailure');
+
+    const closed = buildHookSettings('https://rc.example/hooks', { failClosed: true });
+    expect(closed.hooks.PreToolUse[0]!.hooks[0]).toMatchObject({ onFailure: 'block', timeout: 300 });
+    // Only tool calls are stopped; recording what happened afterwards never blocks anything.
+    expect(JSON.stringify({ ...closed.hooks, PreToolUse: [] })).not.toContain('onFailure');
+  });
+
   it('asks git which repo this is when a session starts or changes folder', () => {
     for (const event of SESSION_EVENTS) {
       expect(settings.hooks[event]).toEqual([

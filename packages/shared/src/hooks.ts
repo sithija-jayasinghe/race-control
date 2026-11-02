@@ -102,8 +102,12 @@ export function sessionHookCommand(url: string): string {
  *
  * Session start and folder changes use a command hook, because only a command can ask git which repo
  * this is. Everything else is an HTTP hook.
+ *
+ * By default a tool call goes ahead when Race Control can't be reached (fail-open). `failClosed` blocks it
+ * instead (`"onFailure": "block"`, Claude Code v2.1.295+), on `PreToolUse` only: a connection failure, a
+ * timeout or any answer other than 2xx, including a missing or revoked token, then stops every tool call.
  */
-export function buildHookSettings(hooksUrl: string) {
+export function buildHookSettings(hooksUrl: string, options: { failClosed?: boolean } = {}) {
   const base = hooksUrl.replace(/\/+$/, '');
   const hook = (event: IngestedHookEvent, timeout?: number) => ({
     type: 'http' as const,
@@ -111,6 +115,7 @@ export function buildHookSettings(hooksUrl: string) {
     ...(timeout === undefined ? {} : { timeout }),
     headers: { Authorization: `Bearer $${TOKEN_ENV_VAR}` },
     allowedEnvVars: [TOKEN_ENV_VAR],
+    ...(event === 'PreToolUse' && options.failClosed ? { onFailure: 'block' as const } : {}),
   });
   const sessionHook = (event: 'SessionStart' | 'CwdChanged') => [
     { hooks: [{ type: 'command' as const, command: sessionHookCommand(`${base}/${event}`), timeout: 10 }] },

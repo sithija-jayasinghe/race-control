@@ -129,6 +129,21 @@ describe('connect Claude Code', () => {
     expect(Object.keys(copied.hooks)).toContain('SessionEnd');
   });
 
+  it('can block tool calls while Race Control is down', async () => {
+    fakeServer({ signedIn: true });
+    openSettings();
+    const user = userEvent.setup();
+
+    const snippet = await screen.findByLabelText('Hook settings');
+    expect(snippet).not.toHaveTextContent('onFailure');
+    expect(screen.getByRole('radio', { name: 'Carry on' })).toHaveAttribute('aria-checked', 'true');
+
+    await user.click(screen.getByRole('radio', { name: 'Block' }));
+
+    expect(snippet).toHaveTextContent('"onFailure": "block"');
+    expect(screen.getByText(/Every tool call is blocked until it’s back/)).toHaveTextContent('Needs Claude Code 2.1.295 or later.');
+  });
+
   it('confirms the connection once your agent has reported', async () => {
     const server = fakeServer({ signedIn: true });
     server.state.sessions.set(TEAM.id, [agentSession()]);

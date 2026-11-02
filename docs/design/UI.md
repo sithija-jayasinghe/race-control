@@ -66,7 +66,7 @@ Each status always has a word as well as a colour, so it never relies on colour 
 
 - **Pit lane card** on the Pit wall, bottom left (full width above the tab bar on phones): blue kerb, "PIT LANE" and a countdown to auto-deny, "**Amaya** wants to write", the file or command in mono, the rule and repo, a draining blue bar, then **Deny** and **Approve**. Below them, leads get a small **Always allow this** tick box (green when ticked) when the call is one exact file or command; approving with it ticked adds a live GO rule, and the outcome adds "Goes straight through from now on" with a link to Rules. It shows the oldest waiting approval, with "+n waiting" linking to the queue. After an answer the card says what happened for a moment ("Approved. Amaya's agent carries on."). Developers see "Waiting for a lead" instead of the buttons. While it shows, the Team Radio card steps aside on screens narrower than 1280 px.
 - **Approvals page** (`/approvals`): the pit lane (waiting, with a clock and the buttons on each row), then "Last 24 hours" as **GO** (approved), **STOP** (denied) and **OUT** (no answer), with who answered and when. Answered rows open the session's timeline.
-- **Phone screen** (`/approvals/:id`, from the card's "Pit lane" link or a queue row): the clock big, the target unclipped, and **Approve** above **Deny** in thumb reach, with the same tick box under them.
+- **Phone screen** (`/approvals/:id`, from the card's "Pit lane" link or a queue row): the clock big, the target unclipped, and **Approve** above **Deny** with the same tick box under them. On phones the card fills the screen above the tab bar and the answer sits at its bottom, in thumb reach; once answered, the outcome takes its place.
 - The nav item has a blue badge with the number waiting.
 
 ## Layout
@@ -122,7 +122,7 @@ Desktop                                              Phone
 | Create your team | `/start` | 1 |
 | Pit wall (Week 1: empty track, connect checklist, and a demo race at `?demo=1`) | `/t/:teamId` | 1, live map in Week 3 |
 | Team: members and invite links | `/t/:teamId/team` | 1 |
-| Settings: your tokens, theme | `/t/:teamId/settings` | 1 |
+| Settings: your tokens, theme, and Connect Claude Code (where to add the hooks, and **If Race Control is down: Carry on / Block**, with one line on what Block means) | `/t/:teamId/settings` | 1 |
 | Sessions (filter by status) and session timeline | `/t/:teamId/sessions`, `/t/:teamId/sessions/:id` | 3 |
 | Rules | `/t/:teamId/rules` | 4 |
 | Approvals queue and approval card | `/t/:teamId/approvals`, `/t/:teamId/approvals/:id` | 4 |
