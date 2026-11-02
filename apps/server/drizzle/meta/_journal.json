@@ -43,6 +43,13 @@
       "when": 1793525876661,
       "tag": "0005_repo_key",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793630334434,
+      "tag": "0006_allow_rules",
+      "breakpoints": true
     }
   ]
 }

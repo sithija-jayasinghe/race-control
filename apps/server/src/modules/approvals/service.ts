@@ -1,9 +1,11 @@
-import type { Approval, ApprovalDecision } from '@race-control/shared';
+import { alwaysAllowPattern, MAX_RULES, type Approval, type ApprovalDecision, type ApprovalDecisionResult } from '@race-control/shared';
 import type { AppDeps } from '../../app.ts';
+import type { DbOrTx } from '../../db/client.ts';
 import type { TeamAuth } from '../../plugins/team-access.ts';
+import { countRules, findRuleTool, insertRule } from '../rules/repo.ts';
 import { findApproval, serializeApproval, settleApproval, updateEventOutcome } from './repo.ts';
 
-type Deps = Pick<AppDeps, 'db' | 'now' | 'bus' | 'approvals' | 'approvalWaitMs'>;
+type Deps = Pick<AppDeps, 'db' | 'now' | 'bus' | 'approvals' | 'approvalWaitMs' | 'rules'>;
 
 function waitText(ms: number) {
   const minutes = Math.round(ms / 60_000);
@@ -45,15 +47,42 @@ export async function holdForApproval(
   return { decision, reason: `No approval within ${waitText(deps.approvalWaitMs)} (team rule: ${call.ruleName})` };
 }
 
-export type DecideResult = { approval: Approval } | 'not_found' | 'already_decided';
+export type DecideResult = ApprovalDecisionResult | 'not_found' | 'already_decided';
+
+/**
+ * "Always allow this": a live allow rule for exactly the approved file or command, using the approve
+ * rule's tools. Null when the call has nothing exact to allow, or the team is at its rule limit.
+ */
+async function addAllowRule(db: DbOrTx, auth: TeamAuth, approvalId: string, now: Date): Promise<ApprovalDecisionResult['allowRule']> {
+  const row = await findApproval(db, auth.teamId, approvalId);
+  const pattern = row && alwaysAllowPattern(row);
+  const tool = row && (await findRuleTool(db, auth.teamId, row.ruleId));
+  if (!pattern || !tool || (await countRules(db, auth.teamId)) >= MAX_RULES) return null;
+  const rule = await insertRule(db, {
+    teamId: auth.teamId,
+    createdBy: auth.userId,
+    name: `Allow: ${pattern}`.slice(0, 100).trimEnd(),
+    tool,
+    pattern,
+    action: 'allow',
+    mode: 'enforce',
+    now,
+  });
+  return { id: rule.id, name: rule.name };
+}
 
 /** A lead approves or denies. The first answer wins; the held request is woken to pass it on. */
-export async function decideApproval(deps: Deps, auth: TeamAuth, approvalId: string, decision: ApprovalDecision['decision']): Promise<DecideResult> {
-  const status = decision === 'approve' ? 'approved' : 'denied';
-  if (!(await settleApproval(deps.db, auth.teamId, approvalId, status, auth.userId, deps.now()))) {
-    return (await findApproval(deps.db, auth.teamId, approvalId)) ? 'already_decided' : 'not_found';
-  }
+export async function decideApproval(deps: Deps, auth: TeamAuth, approvalId: string, body: ApprovalDecision): Promise<DecideResult> {
+  const status = body.decision === 'approve' ? 'approved' : 'denied';
+  const now = deps.now();
+  const settled = await deps.db.transaction(async (tx) => {
+    if (!(await settleApproval(tx, auth.teamId, approvalId, status, auth.userId, now))) return false;
+    return { allowRule: status === 'approved' && body.alwaysAllow ? await addAllowRule(tx, auth, approvalId, now) : null };
+  });
+  if (!settled) return (await findApproval(deps.db, auth.teamId, approvalId)) ? 'already_decided' : 'not_found';
+
+  if (settled.allowRule) deps.rules.invalidate(auth.teamId);
   deps.approvals.wake(approvalId);
   const approval = await publishApproval(deps, auth.teamId, approvalId);
-  return approval ? { approval } : 'not_found';
+  return approval ? { approval, allowRule: settled.allowRule } : 'not_found';
 }

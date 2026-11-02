@@ -87,6 +87,7 @@ function detailFrom(type: string, payload: unknown): string | null {
   const rule = p.rule as { name?: unknown; action?: unknown } | undefined;
   if (type === 'PreToolUse' && typeof rule?.name === 'string') {
     if (rule.action === 'block') return `Blocked by rule: ${rule.name}`;
+    if (rule.action === 'allow') return `Allowed by rule: ${rule.name}`;
     const approval = p.approval as { status?: unknown; by?: unknown } | undefined;
     const by = typeof approval?.by === 'string' ? ` by ${approval.by}` : '';
     if (approval?.status === 'approved') return `Approved${by}, rule: ${rule.name}`;

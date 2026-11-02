@@ -1,4 +1,4 @@
-import { approvalSchema, type Approval, type ApprovalDecision } from '@race-control/shared';
+import { approvalDecisionResultSchema, approvalSchema, type Approval, type ApprovalDecision } from '@race-control/shared';
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { z } from 'zod';
@@ -45,16 +45,21 @@ export function waitingApprovals(list: Approval[]): Approval[] {
   return list.filter((a) => a.status === 'pending').sort((a, b) => a.requestedAt.localeCompare(b.requestedAt));
 }
 
-/** Leads only. The first answer wins; a late one gets 409 and the list is refreshed. */
+/**
+ * Leads only. The first answer wins; a late one gets 409 and the list is refreshed. `alwaysAllow` with an
+ * approval also adds an allow rule for exactly that file or command.
+ */
 export function useDecide(teamId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ approvalId, decision }: ApprovalDecision & { approvalId: string }) =>
-      api(`/teams/${teamId}/approvals/${approvalId}/decision`, { method: 'POST', body: { decision }, schema: approvalSchema }),
-    onSuccess: (approval) => storeApproval(queryClient, teamId, approval),
+    mutationFn: ({ approvalId, ...body }: ApprovalDecision & { approvalId: string }) =>
+      api(`/teams/${teamId}/approvals/${approvalId}/decision`, { method: 'POST', body, schema: approvalDecisionResultSchema }),
+    onSuccess: (result) => storeApproval(queryClient, teamId, result.approval),
     onError: () => queryClient.invalidateQueries({ queryKey: approvalsKey(teamId) }),
   });
 }
+
+export type Decide = ReturnType<typeof useDecide>;
 
 /** Seconds left until `expiresAt`, ticking every second. */
 export function useCountdown(expiresAt: string): number {

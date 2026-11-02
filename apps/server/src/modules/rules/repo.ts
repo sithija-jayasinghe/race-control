@@ -1,4 +1,4 @@
-import { STARTER_RULES, type RuleInput, type RuleUpdate } from '@race-control/shared';
+import { STARTER_RULES, type RuleInput, type RuleMode, type RuleUpdate } from '@race-control/shared';
 import { and, desc, eq, gte, isNotNull, or, sql } from 'drizzle-orm';
 import type { DbOrTx } from '../../db/client.ts';
 import { events, rules } from '../../db/schema.ts';
@@ -33,11 +33,23 @@ export async function countRules(db: DbOrTx, teamId: string): Promise<number> {
   return db.$count(rules, eq(rules.teamId, teamId));
 }
 
-/** Adds a rule in shadow mode. */
-export async function insertRule(db: DbOrTx, { now, ...values }: RuleInput & { teamId: string; createdBy: string; now: Date }) {
+/** Which tools a team's rule covers. Undefined if the team has no such rule. */
+export async function findRuleTool(db: DbOrTx, teamId: string, ruleId: string): Promise<string | undefined> {
+  const [row] = await db
+    .select({ tool: rules.tool })
+    .from(rules)
+    .where(and(eq(rules.teamId, teamId), eq(rules.id, ruleId)));
+  return row?.tool;
+}
+
+/** Adds a rule, in shadow mode unless `mode` says otherwise. */
+export async function insertRule(
+  db: DbOrTx,
+  { now, mode = 'shadow', ...values }: RuleInput & { teamId: string; createdBy: string; now: Date; mode?: RuleMode },
+) {
   const [row] = await db
     .insert(rules)
-    .values({ ...values, mode: 'shadow', createdAt: now })
+    .values({ ...values, mode, createdAt: now })
     .returning(ruleColumns);
   return row!;
 }

@@ -26,7 +26,7 @@ export async function listRulesWithStats(db: DbOrTx, teamId: string, now: Date):
   return rules.map((rule) => ({ ...serializeRule(rule), matches: counts.get(rule.id)! }));
 }
 
-const strictness = { none: 0, ask: 1, deny: 2 } as const;
+const strictness = { none: 0, allow: 1, ask: 2, deny: 3 } as const;
 
 /**
  * The test lane: what Race Control would do with a command (anything with a space) or an edit to a file.
@@ -43,7 +43,7 @@ export async function testRules(db: DbOrTx, teamId: string, input: string): Prom
   for (const call of calls) {
     const { enforced, shadow } = evaluateRules(rules, call);
     for (const rule of shadow) shadowIds.add(rule.id);
-    const decision = !enforced ? 'none' : enforced.action === 'block' ? 'deny' : 'ask';
+    const decision = !enforced ? 'none' : enforced.action === 'block' ? 'deny' : enforced.action === 'approve' ? 'ask' : 'allow';
     if (strictness[decision] > strictness[result.decision]) result = { decision, ruleId: enforced!.id, shadowIds: [] };
   }
   return { ...result, shadowIds: [...shadowIds] };

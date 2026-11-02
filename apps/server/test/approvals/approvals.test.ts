@@ -1,4 +1,4 @@
-import type { Approval, LiveMessage, SessionTimeline } from '@race-control/shared';
+import { MAX_RULES, type Approval, type ApprovalDecisionResult, type LiveMessage, type SessionTimeline } from '@race-control/shared';
 import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import * as schema from '../../src/db/schema.ts';
@@ -29,8 +29,8 @@ function writeMigration(file = 'db/migrations/0042_users.sql', session = 's1') {
 }
 
 const approvals = async (user: SignedInUser = lead) => (await user.request('GET', `/teams/${teamId}/approvals`)).json<Approval[]>();
-const decide = (id: string, decision: 'approve' | 'deny', user: SignedInUser = lead) =>
-  user.request('POST', `/teams/${teamId}/approvals/${id}/decision`, { decision });
+const decide = (id: string, decision: 'approve' | 'deny', user: SignedInUser = lead, alwaysAllow?: boolean) =>
+  user.request('POST', `/teams/${teamId}/approvals/${id}/decision`, { decision, alwaysAllow });
 
 /** Waits until the held request shows up as a pending approval. */
 async function pending(): Promise<Approval> {
@@ -77,7 +77,10 @@ describe('a held tool call', () => {
     expect(Date.parse(waiting.expiresAt) - Date.parse(waiting.requestedAt)).toBe(5000);
     expect(live.find((m) => m.type === 'event')).toMatchObject({ event: { decision: 'pending' } });
 
-    expect((await decide(waiting.id, 'approve')).json<Approval>()).toMatchObject({ status: 'approved', decidedBy: { name: 'lead' } });
+    expect((await decide(waiting.id, 'approve')).json<ApprovalDecisionResult>()).toMatchObject({
+      approval: { status: 'approved', decidedBy: { name: 'lead' } },
+      allowRule: null,
+    });
     expect((await reply).json()).toEqual({
       hookSpecificOutput: {
         hookEventName: 'PreToolUse',
@@ -156,6 +159,94 @@ describe('a held tool call', () => {
 
     await decide(id, 'approve');
     await reply;
+  });
+});
+
+/** Amaya's agent running a command, held once the publishing rule is live. */
+function runCommand(command: string) {
+  return t.app.inject({
+    method: 'POST',
+    url: '/hooks/PreToolUse',
+    headers: { authorization: `Bearer ${devToken}` },
+    payload: { hook_event_name: 'PreToolUse', session_id: 's1', cwd: '/Users/amaya/code/api', tool_name: 'Bash', tool_input: { command } },
+  });
+}
+
+const teamRules = () => t.db.select().from(schema.rules).where(eq(schema.rules.teamId, teamId));
+
+describe('Always allow this', () => {
+  it('adds a live allow rule for exactly that file, so it never waits again', async () => {
+    const first = writeMigration();
+    const { id } = await pending();
+
+    const result = (await decide(id, 'approve', lead, true)).json<ApprovalDecisionResult>();
+    expect(result).toMatchObject({ approval: { status: 'approved' }, allowRule: { name: 'Allow: db/migrations/0042_users.sql' } });
+    expect((await first).json()).toMatchObject({ hookSpecificOutput: { permissionDecision: 'allow' } });
+    const rule = (await teamRules()).find((r) => r.id === result.allowRule!.id);
+    expect(rule).toMatchObject({ action: 'allow', mode: 'enforce', pattern: 'db/migrations/0042_users.sql', tool: 'Edit|MultiEdit|Write|NotebookEdit' });
+
+    // The same file goes straight through; any other migration still waits.
+    expect((await writeMigration()).body).toBe('');
+    const second = writeMigration('db/migrations/0043_plans.sql');
+    const next = await pending();
+    expect(next.target).toBe('db/migrations/0043_plans.sql');
+    await decide(next.id, 'deny');
+    await second;
+  });
+
+  it('adds nothing on a deny, or for a call it cannot allow exactly', async () => {
+    await t.db.update(schema.rules).set({ mode: 'enforce' }).where(and(eq(schema.rules.teamId, teamId), eq(schema.rules.name, 'Publishing needs a lead')));
+    const before = (await teamRules()).length;
+
+    const denied = writeMigration();
+    expect((await decide((await pending()).id, 'deny', lead, true)).json<ApprovalDecisionResult>().allowRule).toBeNull();
+    await denied;
+
+    for (const command of ['npm publish && rm -rf dist', 'npm publish --otp=123 ghp_abcdefghijklmnopqrstuvwxyz0123', 'npm publish *']) {
+      const held = runCommand(command);
+      const result = (await decide((await pending()).id, 'approve', lead, true)).json<ApprovalDecisionResult>();
+      expect(result).toMatchObject({ approval: { status: 'approved' }, allowRule: null });
+      expect((await held).json()).toMatchObject({ hookSpecificOutput: { permissionDecision: 'allow' } });
+    }
+    expect(await teamRules()).toHaveLength(before);
+  });
+
+  it('still approves when the team is at its rule limit', async () => {
+    const existing = (await teamRules()).length;
+    await t.db.insert(schema.rules).values(
+      Array.from({ length: MAX_RULES - existing }, (_, i) => ({
+        teamId,
+        name: `Filler ${i}`,
+        tool: 'Bash',
+        pattern: `filler-${i}`,
+        action: 'block' as const,
+      })),
+    );
+    const held = writeMigration();
+
+    const result = (await decide((await pending()).id, 'approve', lead, true)).json<ApprovalDecisionResult>();
+
+    expect(result).toMatchObject({ approval: { status: 'approved' }, allowRule: null });
+    expect((await held).json()).toMatchObject({ hookSpecificOutput: { permissionDecision: 'allow' } });
+    expect(await teamRules()).toHaveLength(MAX_RULES);
+  });
+
+  it('is for leads only, and adds the rule to their own team only', async () => {
+    const outsider = await signInAs(t, 'outsider@example.test');
+    const otherTeam = await createTeamAs(outsider, 'Other');
+    const otherRules = async () => (await t.db.select().from(schema.rules).where(eq(schema.rules.teamId, otherTeam))).length;
+    const before = await otherRules();
+    const held = writeMigration();
+    const { id } = await pending();
+
+    expect((await decide(id, 'approve', dev, true)).statusCode).toBe(403);
+    expect((await outsider.request('POST', `/teams/${otherTeam}/approvals/${id}/decision`, { decision: 'approve', alwaysAllow: true })).statusCode).toBe(404);
+    expect(await otherRules()).toBe(before);
+
+    await decide(id, 'approve', lead, true);
+    await held;
+    expect((await teamRules()).filter((r) => r.action === 'allow')).toHaveLength(1);
+    expect(await otherRules()).toBe(before);
   });
 });
 

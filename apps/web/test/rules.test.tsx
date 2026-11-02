@@ -64,6 +64,36 @@ describe('Rules page', () => {
     expect(server.callsTo(`POST /teams/${TEAM.id}/rules/test`).at(-1)?.body).toEqual({ input: 'apps/api/.env' });
   });
 
+  it('shows allow rules as GO, and says when one lets a call through', async () => {
+    const server = fakeServer({ signedIn: true });
+    const allow = rule({ name: 'Allow: db/migrations/0042_users.sql', pattern: 'db/migrations/0042_users.sql', action: 'allow', mode: 'enforce' });
+    server.state.rules.set(TEAM.id, [...starter(), allow]);
+    server.on(`POST /teams/${TEAM.id}/rules/test`, () => ({ status: 200, body: { decision: 'allow', ruleId: allow.id, shadowIds: [] } }));
+    renderApp(`/t/${TEAM.id}/rules`);
+
+    const rows = within(await screen.findByRole('list', { name: 'Rules' })).getAllByRole('listitem');
+    expect(rows.at(-1)).toHaveTextContent('GOAllow, liveAllow: db/migrations/0042_users.sql');
+    await userEvent.type(screen.getByRole('textbox', { name: 'Try a file path or command' }), 'db/migrations/0042_users.sql');
+
+    expect((await screen.findByText(/Goes through/)).closest('p')).toHaveTextContent('● Goes through: allowed by Allow: db/migrations/0042_users.sql');
+  });
+
+  it('offers Go in the drawer, for an allow rule', async () => {
+    const server = fakeServer({ signedIn: true });
+    server.state.rules.set(TEAM.id, starter());
+    renderApp(`/t/${TEAM.id}/rules`);
+
+    await userEvent.click(await screen.findByRole('button', { name: /New rule/ }));
+    const form = screen.getByRole('form', { name: 'New rule' });
+    expect(within(form).getAllByRole('radio').map((r) => r.textContent)).toEqual(['StopBlock', 'PitNeeds a lead', 'GoAllow']);
+    await userEvent.type(within(form).getByRole('textbox', { name: 'Rule name' }), 'Dry runs are fine');
+    await userEvent.click(within(form).getByRole('radio', { name: 'Allow' }));
+    await userEvent.type(within(form).getByRole('textbox', { name: 'Pattern' }), 'db/seed.sql');
+    await userEvent.click(within(form).getByRole('button', { name: 'Add in shadow' }));
+
+    expect(server.callsTo(`POST /teams/${TEAM.id}/rules`)[0]?.body).toMatchObject({ name: 'Dry runs are fine', action: 'allow' });
+  });
+
   it('adds a rule in shadow mode from the drawer, with a live preview', async () => {
     const server = fakeServer({ signedIn: true });
     server.state.rules.set(TEAM.id, starter());

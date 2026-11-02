@@ -200,12 +200,15 @@ export function fakeServer(options: { signedIn?: boolean; teams?: MeResponse['te
         const approval = (state.approvals.get(teamId!) ?? []).find((a) => a.id === approvalId);
         if (!approval) return fail(404, 'not_found');
         if (approval.status !== 'pending') return fail(409, 'already_decided');
+        const { decision, alwaysAllow } = body as { decision: string; alwaysAllow?: boolean };
         Object.assign(approval, {
-          status: (body as { decision: string }).decision === 'approve' ? 'approved' : 'denied',
+          status: decision === 'approve' ? 'approved' : 'denied',
           decidedAt: new Date().toISOString(),
           decidedBy: { userId: USER.id, name: 'lead' },
         });
-        return ok(approval);
+        const allowRule =
+          decision === 'approve' && alwaysAllow ? { id: '77777777-7777-4777-8777-777777777777', name: `Allow: ${approval.target}` } : null;
+        return ok({ approval, allowRule });
       },
     ],
     ['GET', /^\/setup\/hooks$/, () => ok({ hooksUrl: 'http://api.test/hooks' })],

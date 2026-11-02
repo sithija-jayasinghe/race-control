@@ -1,0 +1,1 @@
+ALTER TYPE "public"."rule_action" ADD VALUE 'allow';

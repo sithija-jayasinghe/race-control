@@ -2,9 +2,9 @@ import type { Approval } from '@race-control/shared';
 import type { CSSProperties } from 'react';
 import { Link, useParams } from 'react-router';
 import { AppShell } from '@/components/app-shell';
-import { agentName, approvalOutcome, Countdown, DecideButtons } from '@/components/approval-card';
+import { agentName, AllowNote, approvalOutcome, Countdown, DecideButtons } from '@/components/approval-card';
 import { Panel } from '@/components/panel';
-import { approvalVerb, approvalWho, useApproval, useApprovals, waitingApprovals } from '@/lib/approvals';
+import { approvalVerb, approvalWho, useApproval, useApprovals, useDecide, waitingApprovals } from '@/lib/approvals';
 import { cn } from '@/lib/utils';
 import { useTeamContext } from '@/routes';
 
@@ -130,6 +130,7 @@ export function ApprovalPage() {
   const { me, team } = useTeamContext();
   const { approvalId = '' } = useParams();
   const approval = useApproval(team.id, approvalId);
+  const decide = useDecide(team.id);
   const data = approval.data;
 
   return (
@@ -169,11 +170,12 @@ export function ApprovalPage() {
                 </p>
               </div>
               {data.status === 'pending' ? (
-                <DecideButtons approval={data} teamId={team.id} canDecide={team.role === 'lead'} stacked />
+                <DecideButtons approval={data} teamId={team.id} canDecide={team.role === 'lead'} stacked decide={decide} />
               ) : (
                 <p role="status" className={cn('text-center text-sm', RESULT[data.status].className)}>
                   {approvalOutcome(data)}
                   <span className="mt-1 block text-xs text-muted-foreground">{decidedLine(data, me.user.id)}</span>
+                  <AllowNote decide={decide} teamId={team.id} />
                 </p>
               )}
             </div>

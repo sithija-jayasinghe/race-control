@@ -146,7 +146,7 @@ type Rule = {
   name: string;                 // "Never touch .env"
   tool: string;                 // "Bash", "Edit|Write" (a list) or "*"
   pattern: string;              // wildcard pattern on the file path or command (see below)
-  action: 'block' | 'approve';  // approve = pause and ask the team lead
+  action: 'block' | 'approve' | 'allow';  // approve = pause and ask the team lead; allow = let through without asking a lead
   mode: 'enforce' | 'shadow';   // shadow = record "would have matched", never block
   enabled: boolean;
 };
@@ -156,9 +156,10 @@ Evaluation in the `PreToolUse` handler:
 1. Load the team's enabled rules (cached in memory, invalidated on change)
 2. Build the match target: the raw `tool_input.command` for Bash (matched in memory, never stored), and the normalised repo-relative path for file tools
 3. Record every matching `shadow` rule on the event, without acting on it
-4. Of the matching `enforce` rules, a block always wins over an approval; otherwise the oldest rule wins:
+4. Of the matching `enforce` rules, a block always wins. Next comes an approval, unless an `allow` rule also matches that same file or command; in a Bash chain this is checked command by command, so allowing `npm test` never lets `npm test && npm publish` through. Then an allow. Within each action the oldest rule wins:
    - `block`: respond `deny` with the rule name as the reason
    - `approve`: create an approval, push it to the lead's dashboard, and **hold the HTTP request open** until the lead decides or the wait expires
+   - `allow`: respond as if no rule matched (no decision, so the developer's own Claude Code permission settings still apply), and record the rule on the event
 5. No match: respond with an empty `200` (no decision), or with only a Team Radio `additionalContext`
 
 **Patterns** are wildcards, never regular expressions, so no rule can make the hook endpoint hang (they are matched in time proportional to pattern × text):
@@ -169,7 +170,7 @@ Evaluation in the `PreToolUse` handler:
 
 **Managing rules:** every member sees the team's rules and can try a file or command against them; only leads add, edit, switch modes or turn rules off (never delete). A team has at most 100 rules. A change through the API clears the server's rule cache at once; changes made elsewhere (the simulator) apply within 30 seconds.
 
-New rules start in `shadow` mode, so the lead can see what a rule would catch before it blocks anyone. When a lead approves an action, they can choose "always allow this", which creates a matching rule.
+New rules start in `shadow` mode, so the lead can see what a rule would catch before it blocks anyone. When a lead approves an action, they can tick "Always allow this". In the same transaction as the approval, that adds a live `allow` rule named "Allow: <target>", with the approve rule's tools and exactly that file or command as the pattern. It is offered only when there is one exact thing to allow: not for a target with a redacted secret, a `*` or `?`, a chain of commands, or one longer than a pattern can hold. At the 100-rule limit the action is still approved, and the lead is told no rule was added. Rules don't name a repo, so the allow rule applies to that path or command in any of the team's repos.
 
 **Approval wait:** keep it below the hook `timeout` (300 s in the snippet). If nobody answers, respond `deny` with "No approval within 4 minutes". This is fail-closed for actions the team flagged as risky.
 
