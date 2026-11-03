@@ -10,6 +10,7 @@ import { TeamBus } from './lib/team-bus.ts';
 import type { Mailer } from './lib/mailer.ts';
 import { ApprovalHub } from './modules/approvals/hub.ts';
 import { approvalRoutes } from './modules/approvals/routes.ts';
+import type { OAuthConfig } from './modules/auth/oauth.ts';
 import { authRoutes } from './modules/auth/routes.ts';
 import { flagRoutes } from './modules/flags/routes.ts';
 import { hookRoutes } from './modules/hooks/routes.ts';
@@ -43,9 +44,12 @@ export type AppDeps = {
   approvals: ApprovalHub;
   /** How long a held request waits for a lead. Tests shorten it. */
   approvalWaitMs: number;
+  /** GitHub and Google sign-in, when configured. */
+  oauth: OAuthConfig;
 };
 
-export type BuildAppOptions = Omit<AppDeps, 'now' | 'bus' | 'rules' | 'approvals' | 'approvalWaitMs'> & {
+export type BuildAppOptions = Omit<AppDeps, 'now' | 'bus' | 'rules' | 'approvals' | 'approvalWaitMs' | 'oauth'> & {
+  oauth?: OAuthConfig;
   now?: () => Date;
   bus?: TeamBus;
   approvalWaitMs?: number;
@@ -57,9 +61,10 @@ export async function buildApp({
   now = () => new Date(),
   bus = new TeamBus(),
   approvalWaitMs = APPROVAL_WAIT_MS,
+  oauth = {},
   ...rest
 }: BuildAppOptions): Promise<FastifyInstance> {
-  const deps: AppDeps = { ...rest, now, bus, rules: new RuleCache(now), approvals: new ApprovalHub(), approvalWaitMs };
+  const deps: AppDeps = { ...rest, now, bus, rules: new RuleCache(now), approvals: new ApprovalHub(), approvalWaitMs, oauth };
   const app = Fastify({
     logger: logger ?? { redact: ['req.headers.authorization', 'req.headers.cookie'] },
   });

@@ -92,6 +92,13 @@ pnpm dev        # server on :4000, web app on :5173
 
 Any Postgres works: [Postgres.app](https://postgresapp.com) on a Mac, Docker, or a free Neon database. Without an email service, **sign-in links are printed in the server's console**, which is fine on your own machine. To email them, create a [Resend](https://resend.com) API key, verify a sending domain, and set `RESEND_API_KEY` and `EMAIL_FROM` in `.env` (until a domain is verified, Resend only delivers to your own address). Production refuses to start without them.
 
+**Sign in with GitHub or Google (optional).** Each shows on the sign-in page once both of its values are in `.env`:
+
+- **GitHub:** create an OAuth app under *Settings → Developer settings → OAuth Apps*. Homepage URL: your `WEB_URL`. Callback URL: `WEB_URL/api/auth/github/callback` (`http://localhost:5173/api/auth/github/callback` in development). Set `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET`.
+- **Google:** in Google Cloud Console, create an OAuth client ID (*Web application*) with the redirect URI `WEB_URL/api/auth/google/callback`. Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
+
+An account is joined only through a verified email, so a GitHub account with someone else's unverified address can't take over their account.
+
 To connect your own Claude Code: sign in, create a token in **Settings**, add its `export RACE_CONTROL_TOKEN=…` line to your shell profile, and copy the hook settings from **Connect Claude Code** into your project's `.claude/settings.json`. Your sessions then appear on the Pit wall. By default your agent carries on if Race Control is down; pick **Block** under "If Race Control is down" to stop tool calls instead (Claude Code 2.1.295+). With Block, a missing or revoked token also stops every tool call.
 
 | Command | What it does |

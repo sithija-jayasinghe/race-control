@@ -1,6 +1,7 @@
 import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
 import { buildApp } from '../../src/app.ts';
 import type { Mailer } from '../../src/lib/mailer.ts';
+import type { OAuthConfig } from '../../src/modules/auth/oauth.ts';
 import { TeamBus } from '../../src/lib/team-bus.ts';
 import { SESSION_COOKIE } from '../../src/plugins/auth.ts';
 import { createTestDb, type TestDb } from './db.ts';
@@ -43,7 +44,7 @@ export type TestApp = {
 /** Held approvals wait this long in tests, unless a test asks for longer. */
 export const TEST_APPROVAL_WAIT_MS = 300;
 
-export async function createTestApp(options: { cookieSecure?: boolean; approvalWaitMs?: number; mailer?: Mailer } = {}): Promise<TestApp> {
+export async function createTestApp(options: { cookieSecure?: boolean; approvalWaitMs?: number; mailer?: Mailer; oauth?: OAuthConfig } = {}): Promise<TestApp> {
   const { db, close: closeDb } = await createTestDb();
   const clock = createClock();
   const { mailer, sent } = createMemoryMailer();
@@ -52,6 +53,7 @@ export async function createTestApp(options: { cookieSecure?: boolean; approvalW
     db,
     bus,
     mailer: options.mailer ?? mailer,
+    oauth: options.oauth,
     webUrl: TEST_WEB_URL,
     publicUrl: TEST_PUBLIC_URL,
     cookieSecure: options.cookieSecure ?? false,

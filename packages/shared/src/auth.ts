@@ -30,5 +30,17 @@ export const meResponseSchema = z.object({
 });
 export type MeResponse = z.infer<typeof meResponseSchema>;
 
+/** Sign-in methods besides the email link that this server has switched on. */
+export const SIGN_IN_PROVIDERS = ['github', 'google'] as const;
+export type SignInProvider = (typeof SIGN_IN_PROVIDERS)[number];
+export const authProvidersResponseSchema = z.object({ providers: z.array(z.enum(SIGN_IN_PROVIDERS)) });
+
+/**
+ * Why GitHub or Google sign-in didn't work, sent back to `/sign-in?error=`: the person said no, the attempt
+ * ran out or was tampered with, the provider has no verified email for them, or the provider failed.
+ */
+export const SIGN_IN_ERRORS = ['cancelled', 'expired', 'no_verified_email', 'failed'] as const;
+export type SignInError = (typeof SIGN_IN_ERRORS)[number];
+
 export const errorResponseSchema = z.object({ error: z.string() });
 export type ErrorResponse = z.infer<typeof errorResponseSchema>;
