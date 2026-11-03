@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { buildApp } from './app.ts';
 import { createDb } from './db/client.ts';
 import { loadEnv } from './env.ts';
@@ -6,6 +8,11 @@ import { expireAllPending } from './modules/approvals/repo.ts';
 
 // Refuses to start in production without an email service (see loadEnv).
 const env = loadEnv();
+
+const webDist = env.WEB_DIST && resolve(env.WEB_DIST);
+if (webDist && !existsSync(resolve(webDist, 'index.html'))) {
+  throw new Error(`WEB_DIST has no index.html (${webDist}). Build the web app first: pnpm --filter @race-control/web build`);
+}
 
 const { db, close } = createDb(env.DATABASE_URL);
 // A restart drops every held hook request, so approvals still pending can never be answered.
@@ -17,6 +24,7 @@ const app = await buildApp({
   publicUrl: env.PUBLIC_URL,
   cookieSecure: env.NODE_ENV === 'production',
   trustProxy: env.TRUST_PROXY,
+  webDist,
   oauth: {
     ...(env.GITHUB_CLIENT_ID && env.GITHUB_CLIENT_SECRET ? { github: { clientId: env.GITHUB_CLIENT_ID, clientSecret: env.GITHUB_CLIENT_SECRET } } : {}),
     ...(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET ? { google: { clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET } } : {}),

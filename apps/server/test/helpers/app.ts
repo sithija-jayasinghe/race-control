@@ -44,7 +44,7 @@ export type TestApp = {
 /** Held approvals wait this long in tests, unless a test asks for longer. */
 export const TEST_APPROVAL_WAIT_MS = 300;
 
-export async function createTestApp(options: { cookieSecure?: boolean; approvalWaitMs?: number; mailer?: Mailer; oauth?: OAuthConfig; logLines?: string[]; trustProxy?: number } = {}): Promise<TestApp> {
+export async function createTestApp(options: { cookieSecure?: boolean; approvalWaitMs?: number; mailer?: Mailer; oauth?: OAuthConfig; logLines?: string[]; trustProxy?: number; webDist?: string } = {}): Promise<TestApp> {
   const { db, close: closeDb } = await createTestDb();
   const clock = createClock();
   const { mailer, sent } = createMemoryMailer();
@@ -60,6 +60,7 @@ export async function createTestApp(options: { cookieSecure?: boolean; approvalW
     now: clock.now,
     approvalWaitMs: options.approvalWaitMs ?? TEST_APPROVAL_WAIT_MS,
     trustProxy: options.trustProxy,
+    webDist: options.webDist,
     logger: options.logLines ? { stream: { write: (line: string) => void options.logLines!.push(line) } } : false,
   });
   return {

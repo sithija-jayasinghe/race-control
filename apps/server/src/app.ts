@@ -5,7 +5,6 @@ import { APPROVAL_WAIT_MS } from '@race-control/shared';
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastify';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import type { Database } from './db/client.ts';
-import { stripApiPrefix } from './lib/api-prefix.ts';
 import { registerErrorHandler, requestForLog } from './lib/errors.ts';
 import { TeamBus } from './lib/team-bus.ts';
 import type { Mailer } from './lib/mailer.ts';
@@ -25,6 +24,7 @@ import { tokenRoutes } from './modules/tokens/routes.ts';
 import { registerAuth } from './plugins/auth.ts';
 import { registerDevTokenAuth } from './plugins/dev-token-auth.ts';
 import { registerTeamAccess } from './plugins/team-access.ts';
+import { registerWeb, routeUrl } from './plugins/web.ts';
 
 export type AppDeps = {
   db: Database;
@@ -57,6 +57,8 @@ export type BuildAppOptions = Omit<AppDeps, 'now' | 'bus' | 'rules' | 'approvals
   logger?: FastifyServerOptions['logger'];
   /** How many proxies in front of the server to trust for the client's IP. 0 trusts none. */
   trustProxy?: number;
+  /** The built web app (`apps/web/dist`). When set, this server also serves the dashboard. */
+  webDist?: string;
 };
 
 export async function buildApp({
@@ -66,6 +68,7 @@ export async function buildApp({
   approvalWaitMs = APPROVAL_WAIT_MS,
   oauth = {},
   trustProxy = 0,
+  webDist,
   ...rest
 }: BuildAppOptions): Promise<FastifyInstance> {
   const deps: AppDeps = { ...rest, now, bus, rules: new RuleCache(now), approvals: new ApprovalHub(), approvalWaitMs, oauth };
@@ -74,7 +77,7 @@ export async function buildApp({
     // proxy. On Render it always does (the app isn't reachable any other way), so trust the nearest
     // `trustProxy` addresses: the client's IP is the entry the outermost trusted proxy added.
     trustProxy: trustProxy > 0 ? (_address: string, hop: number) => hop < trustProxy : false,
-    rewriteUrl: (request) => stripApiPrefix(request.url ?? '/'),
+    rewriteUrl: (request) => routeUrl(request.url ?? '/', Boolean(webDist)),
     // Callers can add a stream or level, but never drop the rules about what may be logged.
     logger:
       logger === false
@@ -104,6 +107,7 @@ export async function buildApp({
   ruleRoutes(app, deps);
   approvalRoutes(app, deps);
   liveRoutes(app, deps);
+  if (webDist) await registerWeb(app, webDist);
 
   return app;
 }

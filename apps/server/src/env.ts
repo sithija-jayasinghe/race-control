@@ -19,6 +19,9 @@ const envSchema = z.object({
   WEB_URL: z.url().default('http://localhost:5173'),
   // Where agents reach this server. The hook settings developers copy point here.
   PUBLIC_URL: z.url().default('http://localhost:4000'),
+  // The built web app (apps/web/dist). When set, this server serves the dashboard too, so WEB_URL and
+  // PUBLIC_URL are the same address. Leave unset in development, where Vite serves it.
+  WEB_DIST: optional,
   // Sends magic links by email (https://resend.com). Without it, links are printed to the console,
   // which is only allowed in development.
   RESEND_API_KEY: optional,
