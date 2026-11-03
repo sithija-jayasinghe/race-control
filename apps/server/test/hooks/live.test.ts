@@ -24,11 +24,11 @@ afterEach(async () => {
 });
 
 /** Connects to a team's live channel and collects what arrives. */
-async function connect(user: SignedInUser, team: string, origin = TEST_WEB_URL) {
+async function connect(user: SignedInUser, team: string, origin = TEST_WEB_URL, prefix = '') {
   await t.app.ready();
   const messages: LiveMessage[] = [];
   const socket = await t.app.injectWS(
-    `/teams/${team}/live`,
+    `${prefix}/teams/${team}/live`,
     { headers: { cookie: `${SESSION_COOKIE}=${user.cookie}`, origin } },
     // Listen before the connection opens, so the hello message isn't missed.
     { onInit: (ws) => ws.on('message', (data: Buffer) => messages.push(JSON.parse(data.toString()) as LiveMessage)) },
@@ -71,6 +71,12 @@ describe('team live channel', () => {
       event: { type: 'PreToolUse', toolName: 'Edit', target: 'src/app.ts', summary: 'edit src/app.ts', decision: 'none' },
     });
     expect(JSON.stringify(messages)).not.toContain('sk-ant');
+  });
+
+  it('also connects under /api, as the dashboard does in production', async () => {
+    const { messages } = await connect(lead, teamId, TEST_WEB_URL, '/api');
+    await until(() => messages.length >= 1);
+    expect(messages[0]).toEqual({ type: 'hello', teamId });
   });
 
   it("never sends one team's activity to another team", async () => {

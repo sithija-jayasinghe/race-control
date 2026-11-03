@@ -5,6 +5,7 @@ import { APPROVAL_WAIT_MS } from '@race-control/shared';
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastify';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import type { Database } from './db/client.ts';
+import { stripApiPrefix } from './lib/api-prefix.ts';
 import { registerErrorHandler, requestForLog } from './lib/errors.ts';
 import { TeamBus } from './lib/team-bus.ts';
 import type { Mailer } from './lib/mailer.ts';
@@ -73,6 +74,7 @@ export async function buildApp({
     // proxy. On Render it always does (the app isn't reachable any other way), so trust the nearest
     // `trustProxy` addresses: the client's IP is the entry the outermost trusted proxy added.
     trustProxy: trustProxy > 0 ? (_address: string, hop: number) => hop < trustProxy : false,
+    rewriteUrl: (request) => stripApiPrefix(request.url ?? '/'),
     // Callers can add a stream or level, but never drop the rules about what may be logged.
     logger:
       logger === false
