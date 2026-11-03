@@ -67,10 +67,10 @@ See [docs/SPEC.md](docs/SPEC.md) for the full design: data model, guardrail engi
 
 ## Roadmap
 
-- [x] **Week 1 — Foundations:** monorepo, database schema, auth, teams and developer tokens
+- [x] **Week 1 — Foundations:** monorepo, database schema, sign-in (email link, GitHub, Google), teams and developer tokens
 - [x] **Week 2 — Ingestion:** hook endpoints, secret redaction, session tracking and the simulator
-- [ ] **Week 3 — Live dashboard:** WebSocket feed, team view, session timelines, yellow flags and Team Radio heads-ups
-- [ ] **Week 4 — Guardrails and approvals:** rules engine with shadow mode, approval flow and mobile approval screen
+- [x] **Week 3 — Live dashboard:** WebSocket feed, team view, session timelines, yellow flags and Team Radio heads-ups
+- [x] **Week 4 — Guardrails and approvals:** rules engine with shadow mode, approval flow, "always allow" and mobile approval screen
 - [ ] **Week 5 — Real-world test:** a week of use with a real 10-developer team
 - [ ] **Week 6 — Launch:** deployment, public demo and write-up
 
