@@ -10,6 +10,7 @@ describe('loadEnv', () => {
       NODE_ENV: 'development',
       PORT: 4000,
       HOST: '127.0.0.1',
+      TRUST_PROXY: 0,
       WEB_URL: 'http://localhost:5173',
       PUBLIC_URL: 'http://localhost:4000',
     });
@@ -27,6 +28,11 @@ describe('loadEnv', () => {
   it('takes each sign-in provider as a pair', () => {
     expect(loadEnv({ ...required, GITHUB_CLIENT_ID: 'id', GITHUB_CLIENT_SECRET: 'secret' })).toMatchObject({ GITHUB_CLIENT_ID: 'id' });
     expect(() => loadEnv({ ...required, GOOGLE_CLIENT_ID: 'id' })).toThrow('set both GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET');
+  });
+
+  it('takes TRUST_PROXY as a small number of hops', () => {
+    expect(loadEnv({ ...required, TRUST_PROXY: '1' }).TRUST_PROXY).toBe(1);
+    expect(() => loadEnv({ ...required, TRUST_PROXY: 'true' })).toThrow('TRUST_PROXY');
   });
 
   it('requires DATABASE_URL', () => {

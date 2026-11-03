@@ -54,6 +54,8 @@ export type BuildAppOptions = Omit<AppDeps, 'now' | 'bus' | 'rules' | 'approvals
   bus?: TeamBus;
   approvalWaitMs?: number;
   logger?: FastifyServerOptions['logger'];
+  /** How many proxies in front of the server to trust for the client's IP. 0 trusts none. */
+  trustProxy?: number;
 };
 
 export async function buildApp({
@@ -62,10 +64,15 @@ export async function buildApp({
   bus = new TeamBus(),
   approvalWaitMs = APPROVAL_WAIT_MS,
   oauth = {},
+  trustProxy = 0,
   ...rest
 }: BuildAppOptions): Promise<FastifyInstance> {
   const deps: AppDeps = { ...rest, now, bus, rules: new RuleCache(now), approvals: new ApprovalHub(), approvalWaitMs, oauth };
   const app = Fastify({
+    // Fastify ignores a bare hop count, because it can't tell whether the request really came through a
+    // proxy. On Render it always does (the app isn't reachable any other way), so trust the nearest
+    // `trustProxy` addresses: the client's IP is the entry the outermost trusted proxy added.
+    trustProxy: trustProxy > 0 ? (_address: string, hop: number) => hop < trustProxy : false,
     // Callers can add a stream or level, but never drop the rules about what may be logged.
     logger:
       logger === false
