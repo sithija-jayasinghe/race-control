@@ -1,24 +1,21 @@
 import { buildApp } from './app.ts';
 import { createDb } from './db/client.ts';
 import { loadEnv } from './env.ts';
-import { createConsoleMailer } from './lib/mailer.ts';
+import { createConsoleMailer, createResendMailer } from './lib/mailer.ts';
 import { expireAllPending } from './modules/approvals/repo.ts';
 
+// Refuses to start in production without an email service (see loadEnv).
 const env = loadEnv();
-if (env.NODE_ENV === 'production') {
-  // Magic links are printed to the console in development. A real email service is added at deploy time.
-  throw new Error('No email service is configured for production yet');
-}
 
 const { db, close } = createDb(env.DATABASE_URL);
 // A restart drops every held hook request, so approvals still pending can never be answered.
 await expireAllPending(db, new Date());
 const app = await buildApp({
   db,
-  mailer: createConsoleMailer(),
+  mailer: env.RESEND_API_KEY && env.EMAIL_FROM ? createResendMailer({ apiKey: env.RESEND_API_KEY, from: env.EMAIL_FROM }) : createConsoleMailer(),
   webUrl: env.WEB_URL,
   publicUrl: env.PUBLIC_URL,
-  cookieSecure: false,
+  cookieSecure: env.NODE_ENV === 'production',
 });
 app.addHook('onClose', close);
 
