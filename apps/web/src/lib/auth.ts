@@ -1,4 +1,4 @@
-import { meResponseSchema, userSchema, type MeResponse } from '@race-control/shared';
+import { authProvidersResponseSchema, meResponseSchema, userSchema, type MeResponse } from '@race-control/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 import { ApiError, api } from '@/lib/api';
@@ -26,6 +26,16 @@ export function useRequestMagicLink() {
   return useMutation({
     mutationFn: (email: string) =>
       api('/auth/magic-link', { method: 'POST', body: { email }, schema: z.object({ ok: z.literal(true) }) }),
+  });
+}
+
+/** GitHub and Google, when this server has them switched on. Signing in still works without them. */
+export function useAuthProviders() {
+  return useQuery({
+    queryKey: ['auth-providers'],
+    queryFn: async () => (await api('/auth/providers', { schema: authProvidersResponseSchema })).providers,
+    staleTime: Infinity,
+    retry: false,
   });
 }
 
@@ -66,13 +76,23 @@ export function rememberNextPath(path: string) {
   }
 }
 
-/** Returns and forgets the remembered path, or `/`. */
-export function takeNextPath(): string {
+/** The remembered path, or `/`. */
+export function peekNextPath(): string {
   try {
     const next = localStorage.getItem(NEXT_KEY);
-    localStorage.removeItem(NEXT_KEY);
     return isSafeNextPath(next) ? next : '/';
   } catch {
     return '/';
   }
+}
+
+/** Returns and forgets the remembered path, or `/`. */
+export function takeNextPath(): string {
+  const next = peekNextPath();
+  try {
+    localStorage.removeItem(NEXT_KEY);
+  } catch {
+    // Nothing to forget.
+  }
+  return next;
 }

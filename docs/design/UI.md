@@ -116,7 +116,7 @@ Desktop                                              Phone
 
 | Screen | Route | Week |
 |---|---|---|
-| Sign in, check your email | `/sign-in` | 1 |
+| Sign in: email link, then a quiet "or" row with **GitHub** and **Google** (outline buttons with their marks, only the ones the server has switched on). If they send the person back, one red line says why. Then check your email | `/sign-in` | 1 |
 | Link landing | `/auth/verify#token=…` | 1 |
 | Invite | `/invite#token=…` | 1 |
 | Create your team | `/start` | 1 |

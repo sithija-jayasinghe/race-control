@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import { fakeServer, renderApp } from './helpers.tsx';
@@ -31,7 +31,7 @@ describe('sign-in page', () => {
 
     await typeAndSend('dev@example.test');
 
-    expect(await screen.findByText(/no email is sent/)).toHaveTextContent('[dev mailer]');
+    expect(await screen.findByText(/unless an email service is set up/)).toHaveTextContent('[dev mailer]');
   });
 
   it('checks the email before sending anything', async () => {
@@ -83,5 +83,38 @@ describe('sign-in page', () => {
     await user.click(await screen.findByRole('button', { name: 'Use a different email' }));
 
     expect(screen.getByRole('heading', { name: 'Take your seat' })).toBeInTheDocument();
+  });
+
+  it('offers GitHub and Google when the server has them, going back where you were headed', async () => {
+    const server = fakeServer();
+    server.on('GET /auth/providers', () => ({ status: 200, body: { providers: ['github', 'google'] } }));
+    localStorage.setItem('rc-next', '/t/abc/approvals');
+    renderApp('/sign-in');
+
+    const github = await screen.findByRole('link', { name: 'Sign in with GitHub' });
+    expect(github).toHaveAttribute('href', '/api/auth/github/start?next=%2Ft%2Fabc%2Fapprovals');
+    expect(screen.getByRole('link', { name: 'Sign in with Google' })).toHaveAttribute('href', expect.stringMatching(/^\/api\/auth\/google\/start/));
+    localStorage.clear();
+  });
+
+  it('shows only the email link when no provider is set up', async () => {
+    fakeServer();
+    renderApp('/sign-in');
+
+    await screen.findByRole('button', { name: 'Send sign-in link' });
+    await waitFor(() => expect(screen.queryByRole('link', { name: /Sign in with/ })).not.toBeInTheDocument());
+    expect(screen.queryByText('or')).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['no_verified_email', 'GitHub didn’t share a verified email. Verify one there, or use the email link.'],
+    ['cancelled', 'Signing in with GitHub was cancelled.'],
+    ['expired', 'That sign-in took too long or was interrupted. Try again.'],
+    ['failed', 'GitHub didn’t answer properly. Try again, or use the email link.'],
+  ])('explains why GitHub sign-in came back with %s', async (error, message) => {
+    fakeServer();
+    renderApp(`/sign-in?error=${error}&provider=github`);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(message);
   });
 });

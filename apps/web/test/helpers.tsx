@@ -73,6 +73,7 @@ export function fakeServer(options: { signedIn?: boolean; teams?: MeResponse['te
   const routes: Array<[string, RegExp, Handler]> = [
     ['GET', /^\/me$/, () => (state.signedIn ? ok({ user: USER, teams: state.teams }) : fail(401, 'unauthorized'))],
     ['POST', /^\/auth\/magic-link$/, () => ({ status: 202, body: { ok: true } })],
+    ['GET', /^\/auth\/providers$/, () => ok({ providers: [] })],
     [
       'POST',
       /^\/auth\/verify$/,
