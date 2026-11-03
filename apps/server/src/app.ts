@@ -5,7 +5,7 @@ import { APPROVAL_WAIT_MS } from '@race-control/shared';
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastify';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import type { Database } from './db/client.ts';
-import { registerErrorHandler } from './lib/errors.ts';
+import { registerErrorHandler, requestForLog } from './lib/errors.ts';
 import { TeamBus } from './lib/team-bus.ts';
 import type { Mailer } from './lib/mailer.ts';
 import { ApprovalHub } from './modules/approvals/hub.ts';
@@ -66,7 +66,11 @@ export async function buildApp({
 }: BuildAppOptions): Promise<FastifyInstance> {
   const deps: AppDeps = { ...rest, now, bus, rules: new RuleCache(now), approvals: new ApprovalHub(), approvalWaitMs, oauth };
   const app = Fastify({
-    logger: logger ?? { redact: ['req.headers.authorization', 'req.headers.cookie'] },
+    // Callers can add a stream or level, but never drop the rules about what may be logged.
+    logger:
+      logger === false
+        ? false
+        : { ...(typeof logger === 'object' ? logger : {}), serializers: { req: requestForLog }, redact: ['req.headers.authorization', 'req.headers.cookie'] },
   });
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
