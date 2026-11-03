@@ -30,6 +30,6 @@ We want four sign-in methods (magic link, GitHub, Google, passkeys) without pass
 ## Consequences
 
 - No passwords to store, reset or leak.
-- Production needs an email service before deploy (for example Resend). Until then the server refuses to start with `NODE_ENV=production`, and development prints links to the console. That console line is a login secret, which is acceptable only on a developer's own machine.
+- Magic links are emailed with [Resend](https://resend.com), called with `fetch` (no SDK), when `RESEND_API_KEY` and `EMAIL_FROM` are set; the server refuses to start with `NODE_ENV=production` without them. Otherwise development prints links to the console. That console line is a login secret, which is acceptable only on a developer's own machine. If sending fails, `POST /auth/magic-link` answers `502 email_failed`: that depends only on the email service, so it still doesn't reveal who has an account. Errors are logged without the address or link.
 - **Cookies and deployment:** a `SameSite=Lax` cookie isn't sent on requests between unrelated sites, so the web app and the API must look like one site. Either serve the API under the web app's domain (for example a Vercel rewrite from `/api` to the server) or put both on subdomains of one domain. Decide in Week 6.
 - `SESSION_SECRET` was removed from `.env.example`: sessions are looked up by hash, so nothing needs signing.

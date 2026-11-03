@@ -90,7 +90,7 @@ pnpm --filter @race-control/server db:migrate
 pnpm dev        # server on :4000, web app on :5173
 ```
 
-Any Postgres works: [Postgres.app](https://postgresapp.com) on a Mac, Docker, or a free Neon database. In development there's no email service, so **sign-in links are printed in the server's console**.
+Any Postgres works: [Postgres.app](https://postgresapp.com) on a Mac, Docker, or a free Neon database. Without an email service, **sign-in links are printed in the server's console**, which is fine on your own machine. To email them, create a [Resend](https://resend.com) API key, verify a sending domain, and set `RESEND_API_KEY` and `EMAIL_FROM` in `.env` (until a domain is verified, Resend only delivers to your own address). Production refuses to start without them.
 
 To connect your own Claude Code: sign in, create a token in **Settings**, add its `export RACE_CONTROL_TOKEN=…` line to your shell profile, and copy the hook settings from **Connect Claude Code** into your project's `.claude/settings.json`. Your sessions then appear on the Pit wall. By default your agent carries on if Race Control is down; pick **Block** under "If Race Control is down" to stop tool calls instead (Claude Code 2.1.295+). With Block, a missing or revoked token also stops every tool call.
 

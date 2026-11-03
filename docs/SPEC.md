@@ -251,7 +251,7 @@ Index `events(team_id, created_at desc)`, `events(session_id, created_at)` and `
 | Server | Fastify + `@fastify/websocket` | Fast, typed, easy long-held requests for approvals |
 | Database | PostgreSQL (Neon free tier) + Drizzle ORM | Relational data with JSONB for event payloads |
 | Web | React + Vite + Tailwind CSS + TanStack Query | Fast dashboard, live updates via WebSocket |
-| Auth | Users: magic link, then GitHub, Google and passkeys, all linked to one account ([ADR 0002](decisions/0002-dashboard-login.md)); a 30-day `httpOnly` cookie. Hooks: Bearer developer tokens | No passwords to store; developers sign in the way they already do |
+| Auth | Users: magic link, then GitHub, Google and passkeys, all linked to one account ([ADR 0002](decisions/0002-dashboard-login.md)); a 30-day `httpOnly` cookie; sign-in emails sent with Resend. Hooks: Bearer developer tokens | No passwords to store; developers sign in the way they already do |
 | Tests | Vitest, Fastify `inject` for HTTP, PGlite for database tests ([ADR 0001](decisions/0001-pglite-for-database-tests.md)); Playwright for one end-to-end flow | Confidence in the guardrail engine and team isolation |
 | Deploy | Server on Render or Fly.io, web on Vercel, Neon Postgres | Free or very cheap to run a demo |
 | CI | GitHub Actions: lint, type-check, test on every push | Same habits as errbuddy |

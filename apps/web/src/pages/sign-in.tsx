@@ -10,6 +10,7 @@ const RESEND_AFTER_S = 30;
 
 function errorMessage(error: unknown): string {
   if (error instanceof ApiError && error.status === 429) return 'Too many attempts. Wait a few minutes and try again.';
+  if (error instanceof ApiError && error.status === 502) return 'Couldn’t send the email. Try again in a minute.';
   if (error instanceof ApiError && error.status === 0) return "Can't reach Race Control. Check your connection and try again.";
   return 'Something went wrong. Try again.';
 }

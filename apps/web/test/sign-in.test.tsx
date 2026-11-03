@@ -65,6 +65,16 @@ describe('sign-in page', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent("Can't reach Race Control");
   });
 
+  it('says when the email could not be sent', async () => {
+    const server = fakeServer();
+    server.on('POST /auth/magic-link', () => ({ status: 502, body: { error: 'email_failed' } }));
+    renderApp('/sign-in');
+
+    await typeAndSend('dev@example.test');
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Couldn’t send the email. Try again in a minute.');
+  });
+
   it('lets you go back and use a different email', async () => {
     fakeServer();
     renderApp('/sign-in');

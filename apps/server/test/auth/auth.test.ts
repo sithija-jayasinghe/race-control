@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import * as schema from '../../src/db/schema.ts';
+import { MailerError } from '../../src/lib/mailer.ts';
 import { hashToken } from '../../src/lib/secure-token.ts';
 import { MAGIC_LINK_TTL_MS } from '../../src/modules/auth/service.ts';
 import { SESSION_COOKIE, SESSION_TTL_MS } from '../../src/plugins/auth.ts';
@@ -65,6 +66,16 @@ describe('POST /auth/magic-link', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]?.tokenHash).toBe(hashToken(token));
     expect(JSON.stringify(rows)).not.toContain(token);
+  });
+
+  it('says when the email could not be sent', async () => {
+    const failing = await createTestApp({ mailer: { sendMagicLink: () => Promise.reject(new MailerError('Resend answered 500')) } });
+
+    const response = await failing.app.inject({ method: 'POST', url: '/auth/magic-link', payload: { email: 'dev@example.test' } });
+
+    expect(response.statusCode).toBe(502);
+    expect(response.json()).toEqual({ error: 'email_failed' });
+    await failing.close();
   });
 
   it('rejects an invalid email without sending anything', async () => {

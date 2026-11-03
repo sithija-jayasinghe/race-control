@@ -9,6 +9,7 @@ import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import type { AppDeps } from '../../app.ts';
+import { MailerError } from '../../lib/mailer.ts';
 import { SESSION_COOKIE, SESSION_TTL_MS, requireUser } from '../../plugins/auth.ts';
 import * as repo from './repo.ts';
 import { requestMagicLink, verifyMagicLink } from './service.ts';
@@ -25,11 +26,18 @@ export function authRoutes(app: FastifyInstance, deps: AppDeps) {
   r.post(
     '/auth/magic-link',
     {
-      schema: { body: magicLinkRequestSchema, response: { 202: z.object({ ok: z.literal(true) }) } },
+      schema: { body: magicLinkRequestSchema, response: { 202: z.object({ ok: z.literal(true) }), 502: errorResponseSchema } },
       config: { rateLimit: { max: 5, timeWindow: '15 minutes' } },
     },
     async (request, reply) => {
-      await requestMagicLink(deps, request.body.email);
+      try {
+        await requestMagicLink(deps, request.body.email);
+      } catch (error) {
+        if (!(error instanceof MailerError)) throw error;
+        // Whether sending works has nothing to do with who has an account, so saying so reveals nothing.
+        request.log.error({ err: { name: error.name, message: error.message } }, 'sign-in email not sent');
+        return reply.code(502).send({ error: 'email_failed' });
+      }
       return reply.code(202).send({ ok: true });
     },
   );
