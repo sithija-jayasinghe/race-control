@@ -24,6 +24,11 @@ describe('loadEnv', () => {
     expect(loadEnv({ ...required, ...email, NODE_ENV: 'production' }).NODE_ENV).toBe('production');
   });
 
+  it('takes each sign-in provider as a pair', () => {
+    expect(loadEnv({ ...required, GITHUB_CLIENT_ID: 'id', GITHUB_CLIENT_SECRET: 'secret' })).toMatchObject({ GITHUB_CLIENT_ID: 'id' });
+    expect(() => loadEnv({ ...required, GOOGLE_CLIENT_ID: 'id' })).toThrow('set both GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET');
+  });
+
   it('requires DATABASE_URL', () => {
     expect(() => loadEnv({})).toThrow('Invalid environment variables: DATABASE_URL');
   });

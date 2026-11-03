@@ -21,6 +21,12 @@ const envSchema = z.object({
   RESEND_API_KEY: optional,
   // The sender, for example `Race Control <login@yourdomain.com>`, on a domain verified in Resend.
   EMAIL_FROM: optional,
+  // Sign in with GitHub (an OAuth app) and Google (an OAuth client). Each is on only when both of its
+  // values are set. Their callback URL is WEB_URL/api/auth/<github|google>/callback.
+  GITHUB_CLIENT_ID: optional,
+  GITHUB_CLIENT_SECRET: optional,
+  GOOGLE_CLIENT_ID: optional,
+  GOOGLE_CLIENT_SECRET: optional,
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -35,6 +41,12 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
   const env = result.data;
   if (Boolean(env.RESEND_API_KEY) !== Boolean(env.EMAIL_FROM)) {
     throw new Error('Invalid environment variables: set both RESEND_API_KEY and EMAIL_FROM, or neither');
+  }
+  for (const [id, secret] of [
+    ['GITHUB_CLIENT_ID', 'GITHUB_CLIENT_SECRET'],
+    ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'],
+  ] as const) {
+    if (Boolean(env[id]) !== Boolean(env[secret])) throw new Error(`Invalid environment variables: set both ${id} and ${secret}, or neither`);
   }
   if (env.NODE_ENV === 'production' && !env.RESEND_API_KEY) {
     throw new Error('Invalid environment variables: RESEND_API_KEY and EMAIL_FROM are required in production');
