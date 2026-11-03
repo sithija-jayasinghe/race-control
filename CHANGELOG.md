@@ -51,11 +51,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Server support for signing in with GitHub and Google (switched on per provider in `.env`), with PKCE and a single-use attempt cookie. A GitHub or Google account joins an existing account only through a verified email, and keeps signing in to the same account if its email changes later.
 - The sign-in page offers **GitHub** and **Google** under the email link, when the server has them set up, and returns you to the page you were opening. If sign-in with them doesn't work, the page says why (cancelled, timed out, no verified email, or the provider failed).
 - Yellow flags and Team Radio now recognise a repo by its git remote, not its folder name: two clones in differently named folders match, two different repos that share a folder name don't, and file paths are counted from the top of the repo even when the agent starts in a subfolder or moves to another repo. The settings snippet's session start (and a new folder-change hook) runs a one-line command that asks git for the repo's top folder and remote, with any credentials removed before it's sent. Older snippets keep matching by folder name. In the simulator, Kasun's clone is in a folder called `api`.
+- One server can now be the whole site: with `WEB_DIST` set it serves the built dashboard, its API under `/api` (live updates included) and the agent hooks from one address. Built files are cached for good and pages always load the latest deploy; a missing file is a 404, not the app, and other sites can't frame the dashboard.
 
 ### Removed
 - `SESSION_SECRET` from `.env.example`. Login sessions are looked up by hash, so nothing needs signing.
 
 ### Changed
+- Behind a proxy (set `TRUST_PROXY`, 1 on Render), rate limits count each person by their own IP instead of the proxy's, so people signing in at the same time don't lock each other out. A client can't pick its own IP by sending a fake `X-Forwarded-For`.
 - Request logs no longer include query strings, so GitHub's and Google's one-time sign-in codes never reach the logs.
 - The phone approval screen puts Approve, Deny and "Always allow this" at the bottom of the screen, in thumb reach, and the tick box has a bigger tap area.
 - Spec: hook details updated against the current Claude Code docs (600 s default timeout, `onFailure`, `defer`, `additionalContext`).
