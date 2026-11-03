@@ -56,6 +56,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - `SESSION_SECRET` from `.env.example`. Login sessions are looked up by hash, so nothing needs signing.
 
 ### Changed
+- Request logs no longer include query strings, so GitHub's and Google's one-time sign-in codes never reach the logs.
 - The phone approval screen puts Approve, Deny and "Always allow this" at the bottom of the screen, in thumb reach, and the tick box has a bigger tap area.
 - Spec: hook details updated against the current Claude Code docs (600 s default timeout, `onFailure`, `defer`, `additionalContext`).
 - Spec: data model now records which agent a session belongs to (`sessions.agent`, `agent_session_id`), adds `events.target` and `rules.mode`, and uses team-scoped foreign keys.

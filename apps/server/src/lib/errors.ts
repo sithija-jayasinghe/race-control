@@ -2,6 +2,14 @@ import type { FastifyError, FastifyInstance } from 'fastify';
 import { hasZodFastifySchemaValidationErrors } from 'fastify-type-provider-zod';
 
 /**
+ * What each request log line says about the request: no query string, because GitHub and Google send
+ * their one-time `code` and `state` in it. Headers are left out entirely (they carry the token and cookies).
+ */
+export function requestForLog(request: { method: string; url: string; host?: string; ip?: string }) {
+  return { method: request.method, url: request.url.split('?')[0], host: request.host, remoteAddress: request.ip };
+}
+
+/**
  * What may be logged about an unexpected error. Database errors carry the SQL query, its
  * parameters (emails, token hashes) and Postgres `detail` text with row values, so only the
  * error's type, codes and stack frames are kept, never its message.

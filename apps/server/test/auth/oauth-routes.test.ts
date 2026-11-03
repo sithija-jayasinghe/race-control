@@ -10,9 +10,9 @@ import { fakeProviders, type FakeAccounts } from '../helpers/oauth.ts';
 const CLIENT = { clientId: 'client-id', clientSecret: 'client-secret' };
 let t: TestApp;
 
-async function appWith(accounts: FakeAccounts, providers: Array<'github' | 'google'> = ['github', 'google']) {
+async function appWith(accounts: FakeAccounts, providers: Array<'github' | 'google'> = ['github', 'google'], logLines?: string[]) {
   const fake = fakeProviders(accounts);
-  t = await createTestApp({ oauth: { ...Object.fromEntries(providers.map((p) => [p, CLIENT])), fetch: fake.fetch } });
+  t = await createTestApp({ oauth: { ...Object.fromEntries(providers.map((p) => [p, CLIENT])), fetch: fake.fetch }, logLines });
   return fake;
 }
 
@@ -142,5 +142,16 @@ describe('GET /auth/:provider/callback', () => {
     await appWith({ github });
 
     expect((await signInWith('github', { next: '//evil.test/x' })).headers.location).toBe(`${TEST_WEB_URL}/`);
+  });
+
+  it('never logs the one-time code or state', async () => {
+    const lines: string[] = [];
+    await appWith({ github }, ['github'], lines);
+
+    await signInWith('github');
+
+    const logs = lines.join('\n');
+    expect(logs).toContain('/auth/github/callback');
+    expect(logs).not.toMatch(/the-code|state=/);
   });
 });

@@ -264,7 +264,7 @@ Index `events(team_id, created_at desc)`, `events(session_id, created_at)` and `
 - Auth (magic link first), teams, invites, roles
 - Developer tokens: create, hash, show once, revoke
 - Web pages: sign in, create a team, members and invites, tokens
-- Sign in with GitHub and Google, then passkeys (may carry over into Week 2)
+- Sign in with GitHub and Google (done before Week 5); passkeys moved to after the real-world test
 
 **Week 2 — Ingestion**
 - `POST /hooks/:event` with Bearer auth, validation (zod) and secret redaction
