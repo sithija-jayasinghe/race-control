@@ -51,6 +51,39 @@ export async function findOrCreateEmailUser(db: DbOrTx, email: string): Promise<
   return user;
 }
 
+/**
+ * Finds or creates the user behind a GitHub or Google account. A provider account signs in to whoever it
+ * was linked to before. Otherwise its email, which the provider has verified, joins the account with that
+ * email or starts a new one.
+ */
+export async function findOrCreateProviderUser(
+  db: DbOrTx,
+  account: { provider: 'github' | 'google'; providerUserId: string; email: string; name: string | null },
+): Promise<User> {
+  const [linked] = await db
+    .select(userColumns)
+    .from(authIdentities)
+    .innerJoin(users, eq(users.id, authIdentities.userId))
+    .where(and(eq(authIdentities.provider, account.provider), eq(authIdentities.providerUserId, account.providerUserId)));
+  if (linked) return linked;
+
+  await db
+    .insert(users)
+    .values({ email: account.email, name: account.name?.slice(0, 100) || null })
+    .onConflictDoNothing();
+  const [user] = await db
+    .select(userColumns)
+    .from(users)
+    .where(eq(sql`lower(${users.email})`, account.email));
+  if (!user) throw new Error('user missing after insert');
+
+  await db
+    .insert(authIdentities)
+    .values({ userId: user.id, provider: account.provider, providerUserId: account.providerUserId, email: account.email })
+    .onConflictDoNothing();
+  return user;
+}
+
 export async function insertAuthSession(
   db: DbOrTx,
   values: { userId: string; tokenHash: string; expiresAt: Date; now: Date },

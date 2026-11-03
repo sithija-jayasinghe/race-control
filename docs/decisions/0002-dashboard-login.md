@@ -21,6 +21,13 @@ We want four sign-in methods (magic link, GitHub, Google, passkeys) without pass
 3. The web page sends the token with `POST /auth/verify`. Using POST means email scanners that open links can't use it up.
 4. The token is single-use and expires after 15 minutes. It is consumed with one conditional `UPDATE`, so two requests can't both use it.
 
+**GitHub and Google flow.** The OAuth authorization-code flow with PKCE, called with `fetch` (no SDK).
+1. The sign-in page links to `/api/auth/:provider/start?next=…`. The server makes a random `state` and PKCE verifier, keeps them (with the provider and `next`) in an `httpOnly`, `SameSite=Lax`, 10-minute `rc_oauth` cookie, and redirects to the provider with the state and the S256 challenge.
+2. The provider sends the browser back to `WEB_URL/api/auth/:provider/callback`, through the web app's `/api` like every other request, so the login cookie is set on the dashboard's site. The attempt cookie is cleared at once; a missing cookie, a different provider or a different `state` fails.
+3. The server trades the code (with the verifier and client secret) for a token and asks who signed in: GitHub's `/user` and its primary verified email from `/user/emails`; Google's `userinfo` with `email_verified`. Provider error bodies and tokens are never logged.
+4. A provider account signs in to the user it was linked to before, even if its email has changed since. Otherwise its verified email joins the account with that email, or starts a new one. With no verified email, nobody is signed in.
+5. `next` must be a path on this site (`/…`, not `//…`), so the flow can't send anyone elsewhere. Failures go back to `/sign-in?error=cancelled|expired|no_verified_email|failed&provider=…`.
+
 **Login cookie.** `rc_session`, a random 256-bit value. Only its SHA-256 is stored, in `auth_sessions`. `httpOnly`, `SameSite=Lax`, `Path=/`, `Secure` in production, 30-day fixed expiry so a lead stays signed in on their phone. `last_seen_at` is updated at most hourly.
 
 **Hashing.** Tokens are random, not passwords, so a plain SHA-256 is enough; no salt or slow hash.
