@@ -15,6 +15,15 @@ describe('loadEnv', () => {
     });
   });
 
+  it('takes the email settings together, and requires them in production', () => {
+    const email = { RESEND_API_KEY: 're_test_key', EMAIL_FROM: 'Race Control <login@rc.example>' };
+    expect(loadEnv({ ...required, ...email })).toMatchObject(email);
+    expect(loadEnv({ ...required, RESEND_API_KEY: ' ', EMAIL_FROM: '' }).RESEND_API_KEY).toBeUndefined();
+    expect(() => loadEnv({ ...required, RESEND_API_KEY: 're_test_key' })).toThrow('set both RESEND_API_KEY and EMAIL_FROM');
+    expect(() => loadEnv({ ...required, NODE_ENV: 'production' })).toThrow('required in production');
+    expect(loadEnv({ ...required, ...email, NODE_ENV: 'production' }).NODE_ENV).toBe('production');
+  });
+
   it('requires DATABASE_URL', () => {
     expect(() => loadEnv({})).toThrow('Invalid environment variables: DATABASE_URL');
   });
