@@ -30,6 +30,16 @@ describe('loadEnv', () => {
     expect(() => loadEnv({ ...required, GOOGLE_CLIENT_ID: 'id' })).toThrow('set both GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET');
   });
 
+  it("uses Render's site address for both URLs, unless they're set", () => {
+    const render = { ...required, RENDER_EXTERNAL_URL: 'https://race-control.onrender.com' };
+    expect(loadEnv(render)).toMatchObject({ WEB_URL: 'https://race-control.onrender.com', PUBLIC_URL: 'https://race-control.onrender.com' });
+    expect(loadEnv({ ...render, WEB_URL: 'https://rc.example', PUBLIC_URL: 'https://rc.example' })).toMatchObject({
+      WEB_URL: 'https://rc.example',
+      PUBLIC_URL: 'https://rc.example',
+    });
+    expect(loadEnv({ ...required, WEB_URL: ' ' }).WEB_URL).toBe('http://localhost:5173');
+  });
+
   it('takes TRUST_PROXY as a small number of hops', () => {
     expect(loadEnv({ ...required, TRUST_PROXY: '1' }).TRUST_PROXY).toBe(1);
     expect(() => loadEnv({ ...required, TRUST_PROXY: 'true' })).toThrow('TRUST_PROXY');

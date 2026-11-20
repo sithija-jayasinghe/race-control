@@ -38,7 +38,14 @@ const envSchema = z.object({
 export type Env = z.infer<typeof envSchema>;
 
 export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
-  const result = envSchema.safeParse(source);
+  // On Render the site's address is known only once the service exists, and Render passes it in as
+  // RENDER_EXTERNAL_URL. With one service for everything it is both URLs, unless they're set (a custom domain).
+  const site = source.RENDER_EXTERNAL_URL?.trim() || undefined;
+  const result = envSchema.safeParse({
+    ...source,
+    WEB_URL: source.WEB_URL?.trim() || site,
+    PUBLIC_URL: source.PUBLIC_URL?.trim() || site,
+  });
   if (!result.success) {
     // Only report which variables are wrong, never their values.
     const names = result.error.issues.map((issue) => issue.path.join('.')).join(', ');

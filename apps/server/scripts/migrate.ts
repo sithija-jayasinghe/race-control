@@ -22,7 +22,7 @@ try {
   // say what went wrong without the connection string.
   const cause = error instanceof Error && error.cause ? error.cause : error;
   const { code, severity, message } = cause as { code?: string; severity?: string; message?: string };
-  console.error(`Migration failed: ${severity ? `Postgres error ${code}` : (message ?? 'unknown error')}`);
+  console.error(`Migration failed: ${severity ? `Postgres error ${code}` : message || code || 'unknown error'}`);
   process.exitCode = 1;
 } finally {
   await client.end();
