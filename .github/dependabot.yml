@@ -5,8 +5,14 @@ updates:
     schedule:
       interval: weekly
     groups:
-      dependencies:
-        patterns: ["*"]
+      # Minor and patch updates arrive together in one PR. Majors each get their own PR, so one
+      # breaking change (like a TypeScript major the linter doesn't support yet) can't hold back the rest.
+      minor-and-patch:
+        update-types: [minor, patch]
+    ignore:
+      # The server runs on Node 22 (.nvmrc), so its types stay on 22 until the runtime moves.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
