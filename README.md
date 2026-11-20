@@ -76,8 +76,6 @@ See [docs/SPEC.md](docs/SPEC.md) for the full design: data model, guardrail engi
 
 ## Getting started
 
-Race Control is early: the server and web app run, but there are no features yet.
-
 You need Node 22 (see `.nvmrc`) and pnpm via Corepack:
 
 ```bash
@@ -108,6 +106,22 @@ To connect your own Claude Code: sign in, create a token in **Settings**, add it
 | `pnpm --filter @race-control/server db:migrate` | Apply migrations to the Postgres in `DATABASE_URL` (Neon, Postgres.app or Docker) |
 | `pnpm simulate --viewer you@example.com` | With `pnpm dev` running: five demo drivers race through the real hook endpoint in a "Demo team" you can watch. Add `--loop` to keep going, `--speed 4` to play faster |
 | `pnpm simulate --reset` | Delete the Demo team, its sessions and the demo users |
+
+## Deploy
+
+Race Control runs as **one free Render web service** (the dashboard, its API and the hooks on one address) with a **free Neon Postgres**, both in Singapore. Why: [ADR 0003](docs/decisions/0003-one-service-on-render.md). `render.yaml` describes the service.
+
+1. **Database:** create a [Neon](https://neon.com) project in *AWS Asia Pacific (Singapore)* and copy its connection string.
+2. **Service:** in [Render](https://render.com), *New → Blueprint*, pick this repo. Render reads `render.yaml` and asks for:
+   - `DATABASE_URL`: the Neon connection string
+   - `RESEND_API_KEY` and `EMAIL_FROM`: required in production
+   - `GITHUB_CLIENT_ID`/`SECRET` and `GOOGLE_CLIENT_ID`/`SECRET`: optional, leave a pair empty to turn it off
+
+   Each deploy builds the web app, runs the database migrations and starts the server. The site's address (`https://<name>.onrender.com`) is used for magic links, OAuth callbacks and the hook settings automatically; for a custom domain, set `WEB_URL` and `PUBLIC_URL` to it.
+3. **Keep it awake:** a free service sleeps after 15 minutes without traffic, and waking takes about a minute, which stalls agents' hooks. Add a free uptime check (for example [cron-job.org](https://cron-job.org)) that calls `https://<name>.onrender.com/health` every 10 minutes.
+4. **Sign-in providers:** add `https://<name>.onrender.com/api/auth/github/callback` to the GitHub OAuth app and `https://<name>.onrender.com/api/auth/google/callback` to the Google OAuth client. To email sign-in links to anyone but yourself, verify a domain in Resend and use it in `EMAIL_FROM`.
+
+The free plan has a tenth of a CPU. If hooks get slow, Render's Starter plan removes that limit and the need for the uptime check.
 
 ## Contributing
 

@@ -1,0 +1,46 @@
+# Render Blueprint: one free web service in Singapore that is the whole site (ADR 0003). The database
+# is Neon's free Postgres, not Render's (Render's free one is deleted after 30 days).
+# Set up: Render dashboard > New > Blueprint > this repo. See "Deploy" in the README.
+services:
+  - type: web
+    name: race-control
+    runtime: node
+    plan: free
+    region: singapore
+    # Node comes from .nvmrc; pnpm from package.json's packageManager, through Corepack. The web build
+    # needs devDependencies, so the install runs as development even though the service is production.
+    buildCommand: NODE_ENV=development corepack pnpm install --frozen-lockfile && corepack pnpm --filter @race-control/web build
+    # The free plan has no pre-deploy step, so migrations run on every start (already-applied ones are skipped).
+    startCommand: cd apps/server && node scripts/migrate.ts && node src/index.ts
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Render sets PORT; the server must listen on every interface to receive it.
+      - key: HOST
+        value: 0.0.0.0
+      # Render's proxy sits in front, so rate limits key on the client IP it saw.
+      - key: TRUST_PROXY
+        value: "1"
+      # Relative to apps/server, where the start command runs.
+      - key: WEB_DIST
+        value: ../web/dist
+      - key: COREPACK_ENABLE_DOWNLOAD_PROMPT
+        value: "0"
+      # WEB_URL and PUBLIC_URL default to the service's onrender.com address. Set both for a custom domain.
+      # The rest are asked for when the Blueprint is created. Leave a provider's pair empty to turn it off.
+      - key: DATABASE_URL
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: GITHUB_CLIENT_ID
+        sync: false
+      - key: GITHUB_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
