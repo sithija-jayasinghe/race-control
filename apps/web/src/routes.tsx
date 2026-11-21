@@ -1,20 +1,25 @@
 import type { MeResponse, MyTeam } from '@race-control/shared';
+import type { ComponentType } from 'react';
 import { Navigate, Outlet, useLocation, useOutletContext, useParams, type RouteObject } from 'react-router';
 import { FullScreen } from '@/components/full-screen';
 import { StartLights } from '@/components/start-lights';
 import { rememberNextPath, useMe } from '@/lib/auth';
 import { useLiveTeam, type LiveStatus } from '@/lib/live';
-import { ApprovalPage, ApprovalsPage } from '@/pages/approvals';
-import { InvitePage } from '@/pages/invite';
-import { PitWallPage } from '@/pages/pit-wall';
-import { SessionPage } from '@/pages/session';
-import { RulesPage } from '@/pages/rules';
-import { SessionsPage } from '@/pages/sessions';
-import { SettingsPage } from '@/pages/settings';
 import { SignInPage } from '@/pages/sign-in';
-import { StartPage } from '@/pages/start';
-import { TeamPage } from '@/pages/team';
-import { VerifyPage } from '@/pages/verify';
+
+/**
+ * Each page is its own download, fetched the first time it's opened, so a lead tapping an approval
+ * link on a phone doesn't wait for the rules editor or the track scene. On navigation the router
+ * keeps the current page up until the next one has loaded. Sign-in is the first screen most people
+ * see, so it stays in the main bundle.
+ */
+function page<Name extends string>(load: () => Promise<Record<Name, ComponentType>>, name: Name) {
+  return {
+    lazy: async () => ({ Component: (await load())[name] }),
+    // Opening a link straight to a page (an approval from a phone) shows the start lights while it loads.
+    hydrateFallbackElement: <Loading />,
+  };
+}
 
 type SignedInContext = { me: MeResponse };
 type TeamContext = SignedInContext & { team: MyTeam; live: LiveStatus };
@@ -105,25 +110,25 @@ function SignInRoute() {
 
 export const routes: RouteObject[] = [
   { path: '/sign-in', element: <SignInRoute /> },
-  { path: '/auth/verify', element: <VerifyPage /> },
-  { path: '/invite', element: <InvitePage /> },
+  { path: '/auth/verify', ...page(() => import('@/pages/verify'), 'VerifyPage') },
+  { path: '/invite', ...page(() => import('@/pages/invite'), 'InvitePage') },
   {
     element: <RequireSignIn />,
     children: [
       { index: true, element: <Home /> },
-      { path: '/start', element: <StartPage /> },
+      { path: '/start', ...page(() => import('@/pages/start'), 'StartPage') },
       {
         path: '/t/:teamId',
         element: <TeamLayout />,
         children: [
-          { index: true, element: <PitWallPage /> },
-          { path: 'approvals', element: <ApprovalsPage /> },
-          { path: 'approvals/:approvalId', element: <ApprovalPage /> },
-          { path: 'sessions', element: <SessionsPage /> },
-          { path: 'sessions/:sessionId', element: <SessionPage /> },
-          { path: 'rules', element: <RulesPage /> },
-          { path: 'team', element: <TeamPage /> },
-          { path: 'settings', element: <SettingsPage /> },
+          { index: true, ...page(() => import('@/pages/pit-wall'), 'PitWallPage') },
+          { path: 'approvals', ...page(() => import('@/pages/approvals'), 'ApprovalsPage') },
+          { path: 'approvals/:approvalId', ...page(() => import('@/pages/approvals'), 'ApprovalPage') },
+          { path: 'sessions', ...page(() => import('@/pages/sessions'), 'SessionsPage') },
+          { path: 'sessions/:sessionId', ...page(() => import('@/pages/session'), 'SessionPage') },
+          { path: 'rules', ...page(() => import('@/pages/rules'), 'RulesPage') },
+          { path: 'team', ...page(() => import('@/pages/team'), 'TeamPage') },
+          { path: 'settings', ...page(() => import('@/pages/settings'), 'SettingsPage') },
         ],
       },
     ],
