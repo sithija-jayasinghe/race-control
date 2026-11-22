@@ -32,6 +32,12 @@ export function hookRoutes(app: FastifyInstance, deps: AppDeps) {
       bodyLimit: BODY_LIMIT,
       preHandler: requireDevToken(deps),
       config: { rateLimit: { max: 1200, timeWindow: '1 minute', keyGenerator: rateLimitKey } },
+      // The server's own time, from receiving the request to answering it, in the standard Server-Timing
+      // header. The round trip an agent sees adds the network, so this is what the 50 ms target is checked
+      // against (SPEC section 9). A held request's time includes the lead's.
+      onSend: async (_request, reply) => {
+        reply.header('server-timing', `app;dur=${reply.elapsedTime.toFixed(1)}`);
+      },
     },
     async (request, reply) => {
       const { event } = paramsSchema.parse(request.params);

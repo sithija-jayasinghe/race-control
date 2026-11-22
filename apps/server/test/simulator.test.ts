@@ -2,7 +2,7 @@ import { eq, sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import * as schema from '../src/db/schema.ts';
 import { findYellowFlags } from '../src/modules/flags/repo.ts';
-import { describe as describeStep, readHookReply, runRace, type Send } from '../src/simulator/run.ts';
+import { describe as describeStep, readHookReply, runRace, serverTimingMs, type Send } from '../src/simulator/run.ts';
 import { DEMO_TEAM_NAME, DRIVERS, LAP_MS, steps } from '../src/simulator/scenario.ts';
 import { SimulatorSetupError, resetDemo, revokeSimulatorTokens, setupDemoTeam } from '../src/simulator/setup.ts';
 import { createTeamAs, createTestApp, signInAs, type TestApp } from './helpers/app.ts';
@@ -25,7 +25,7 @@ const injectSend: Send = async (event, token, body, headers = {}) => {
     headers: { ...headers, authorization: `Bearer ${token}` },
     payload: body,
   });
-  return readHookReply(response.statusCode, response.body);
+  return readHookReply(response.statusCode, response.body, response.headers['server-timing'] as string | undefined);
 };
 
 /** A clock that jumps forward instead of waiting. */
@@ -116,6 +116,15 @@ describe('setupDemoTeam', () => {
   });
 });
 
+describe('serverTimingMs', () => {
+  it("reads the app's duration from a Server-Timing header", () => {
+    expect(serverTimingMs('app;dur=3.4')).toBe(3.4);
+    expect(serverTimingMs('cdn;dur=12, app;desc="Race Control";dur=7')).toBe(7);
+    expect(serverTimingMs('db;dur=5')).toBeUndefined();
+    expect(serverTimingMs(null)).toBeUndefined();
+  });
+});
+
 describe('runRace', () => {
   it('replays a lap through the hook endpoint and fills the Demo team', async () => {
     const demo = await setupDemoTeam(t.db, { now: t.clock.now() });
@@ -125,6 +134,9 @@ describe('runRace', () => {
     const stats = await runRace({ send: injectSend, tokens: demo.tokens, laps: 1, speed: 1, ...clock, log: (l) => lines.push(l) });
 
     expect(stats).toMatchObject({ sent: steps(1).length, failed: 0 });
+    // Every reply carried the server's own time.
+    expect(stats.server?.p50Ms).toBeTypeOf('number');
+    expect(stats.server?.p95Ms).toBeTypeOf('number');
     expect(await t.db.$count(schema.sessions, eq(schema.sessions.teamId, demo.teamId))).toBe(5);
     const stored = JSON.stringify(await t.db.select().from(schema.events));
     expect(stored).not.toContain('sk_live_');
@@ -153,7 +165,9 @@ describe('runRace', () => {
     const demo = await setupDemoTeam(t.db, { now: t.clock.now() });
     const clock = instantClock();
 
-    await runRace({ send: () => Promise.resolve({ status: 200 }), tokens: demo.tokens, laps: 1, speed: 4, ...clock });
+    const stats = await runRace({ send: () => Promise.resolve({ status: 200 }), tokens: demo.tokens, laps: 1, speed: 4, ...clock });
+    // A server that doesn't report its own time leaves only the round trip.
+    expect(stats.server).toBeNull();
 
     const last = Math.max(...steps(1).map((s) => s.at));
     expect(clock.now()).toBeGreaterThanOrEqual(last / 4);
