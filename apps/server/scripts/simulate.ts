@@ -104,5 +104,7 @@ await close();
 console.log(
   `\n${stats.sent} events sent, ${stats.failed} failed. Hook latency: ${stats.p50Ms} ms typical, ${stats.p95Ms} ms at the 95th percentile.`,
 );
+// The round trip includes the network; the server's own time is what the 50 ms target is about.
+if (stats.server) console.log(`Of that, the server took ${stats.server.p50Ms} ms typical, ${stats.server.p95Ms} ms at the 95th percentile.`);
 console.log('The simulator tokens are revoked. Remove the demo data with: pnpm simulate --reset');
 process.exit(stats.failed > 0 ? 1 : 0);

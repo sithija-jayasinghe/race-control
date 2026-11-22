@@ -2,26 +2,37 @@ import type { IngestedHookEvent } from '@race-control/shared';
 import { recordToolCall } from '../lib/redact.ts';
 import { LAP_MS, steps, type Step } from './scenario.ts';
 
-/** The HTTP status, plus a rule's decision and a Team Radio heads-up if the reply carried them. */
-export type SendResult = { status: number; decision?: string; reason?: string; radio?: string };
+/**
+ * The HTTP status, plus a rule's decision and a Team Radio heads-up if the reply carried them, and the
+ * server's own time from its `Server-Timing` header.
+ */
+export type SendResult = { status: number; decision?: string; reason?: string; radio?: string; serverMs?: number };
 
 /** Sends one hook event the way Claude Code does. `headers`: extra ones, as the session hook sends. */
 export type Send = (event: IngestedHookEvent, token: string, body: Record<string, unknown>, headers?: Record<string, string>) => Promise<SendResult>;
 
+/** The `app` duration from a `Server-Timing` header, in milliseconds. */
+export function serverTimingMs(header: string | null | undefined): number | undefined {
+  const match = header?.match(/(?:^|,)\s*app\s*;[^,]*?\bdur=([\d.]+)/);
+  return match ? Number(match[1]) : undefined;
+}
+
 /** Reads a hook reply the way Claude Code does: an empty body is "no decision", JSON may carry context. */
-export function readHookReply(status: number, text: string): SendResult {
-  if (!text) return { status };
+export function readHookReply(status: number, text: string, serverTiming?: string | null): SendResult {
+  const serverMs = serverTimingMs(serverTiming);
+  const base = serverMs === undefined ? { status } : { status, serverMs };
+  if (!text) return base;
   try {
     const output = (JSON.parse(text) as { hookSpecificOutput?: Record<string, unknown> }).hookSpecificOutput ?? {};
     const pick = (key: string) => (typeof output[key] === 'string' ? output[key] : undefined);
     return {
-      status,
+      ...base,
       decision: pick('permissionDecision'),
       reason: pick('permissionDecisionReason'),
       radio: pick('additionalContext'),
     };
   } catch {
-    return { status };
+    return base;
   }
 }
 
@@ -34,11 +45,21 @@ export function httpSend(baseUrl: string): Send {
       headers: { ...headers, 'content-type': 'application/json', authorization: `Bearer ${token}` },
       body: JSON.stringify(body),
     });
-    return readHookReply(response.status, await response.text());
+    return readHookReply(response.status, await response.text(), response.headers.get('server-timing'));
   };
 }
 
-export type RaceStats = { sent: number; failed: number; p50Ms: number; p95Ms: number };
+/**
+ * Round-trip hook latency as an agent sees it, and the server's share of it (null when the server
+ * doesn't report it). Requests held for a lead are left out of both.
+ */
+export type RaceStats = {
+  sent: number;
+  failed: number;
+  p50Ms: number;
+  p95Ms: number;
+  server: { p50Ms: number; p95Ms: number } | null;
+};
 
 type RunOptions = {
   send: Send;
@@ -90,6 +111,7 @@ export async function runRace({
   holdAfterMs = 1000,
 }: RunOptions): Promise<RaceStats> {
   const latencies: number[] = [];
+  const serverTimes: number[] = [];
   let failed = 0;
   // Drivers waiting in the pit lane, and their steps since, sent in order once a lead answers.
   const held = new Map<string, Promise<void>>();
@@ -97,10 +119,13 @@ export async function runRace({
   const sendStep = async (step: Step & { sessionId: string; cwd: string; headers?: Record<string, string> }, token: string) => {
     const body = { session_id: step.sessionId, cwd: step.cwd, hook_event_name: step.event, ...step.body };
     const started = now();
-    const { status, decision, reason, radio } = await send(step.event, token, body, step.headers);
+    const { status, decision, reason, radio, serverMs } = await send(step.event, token, body, step.headers);
     // A held request's time is the lead's, not the hook's.
     const took = now() - started;
-    if (took < holdAfterMs) latencies.push(took);
+    if (took < holdAfterMs) {
+      latencies.push(took);
+      if (serverMs !== undefined) serverTimes.push(serverMs);
+    }
     if (status !== 200) failed++;
     log(`${step.driver}  ${describe(step)}${status === 200 ? '' : `  (HTTP ${status})`}`);
     if (decision) log(`${step.driver}  ${decision === 'allow' ? '🟢' : decision === 'deny' ? '⛔' : '✋'} ${decision}: ${reason ?? ''}`);
@@ -134,5 +159,12 @@ export async function runRace({
 
   await Promise.all(held.values());
   latencies.sort((a, b) => a - b);
-  return { sent: latencies.length, failed, p50Ms: percentile(latencies, 50), p95Ms: percentile(latencies, 95) };
+  serverTimes.sort((a, b) => a - b);
+  return {
+    sent: latencies.length,
+    failed,
+    p50Ms: percentile(latencies, 50),
+    p95Ms: percentile(latencies, 95),
+    server: serverTimes.length ? { p50Ms: percentile(serverTimes, 50), p95Ms: percentile(serverTimes, 95) } : null,
+  };
 }

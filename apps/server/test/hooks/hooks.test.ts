@@ -45,6 +45,17 @@ afterEach(async () => {
   await t.close();
 });
 
+describe('server timing', () => {
+  it("reports the server's own time on every reply, answered or refused", async () => {
+    const answered = await hook('PreToolUse', { tool_name: 'Bash', tool_input: { command: 'ls' } });
+    const refused = await hook('Stop', {}, null);
+
+    for (const response of [answered, refused]) {
+      expect(response.headers['server-timing']).toMatch(/^app;dur=\d+\.\d$/);
+    }
+  });
+});
+
 describe('authentication', () => {
   it('refuses requests without a valid token', async () => {
     expect((await hook('PreToolUse', { tool_name: 'Bash', tool_input: {} }, null)).statusCode).toBe(401);
