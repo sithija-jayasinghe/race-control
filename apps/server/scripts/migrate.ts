@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import postgres from 'postgres';
+import { describeDbError } from '../src/lib/errors.ts';
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) {
@@ -17,12 +18,7 @@ try {
   await migrate(drizzle(client), { migrationsFolder: fileURLToPath(new URL('../drizzle', import.meta.url)) });
   console.log('Database is up to date.');
 } catch (error) {
-  // Drizzle wraps the real error, and its message lists the query and parameters. A Postgres error's own
-  // message can quote row values too, so only its code is shown. Others (can't connect, bad password)
-  // say what went wrong without the connection string.
-  const cause = error instanceof Error && error.cause ? error.cause : error;
-  const { code, severity, message } = cause as { code?: string; severity?: string; message?: string };
-  console.error(`Migration failed: ${severity ? `Postgres error ${code}` : message || code || 'unknown error'}`);
+  console.error(`Migration failed: ${describeDbError(error)}`);
   process.exitCode = 1;
 } finally {
   await client.end();
