@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { buildApp } from './app.ts';
 import { createDb } from './db/client.ts';
 import { loadEnv } from './env.ts';
+import { describeDbError } from './lib/errors.ts';
 import { createConsoleMailer, createResendMailer } from './lib/mailer.ts';
 import { expireAllPending } from './modules/approvals/repo.ts';
 
@@ -15,8 +16,18 @@ if (webDist && !existsSync(resolve(webDist, 'index.html'))) {
 }
 
 const { db, close } = createDb(env.DATABASE_URL);
-// A restart drops every held hook request, so approvals still pending can never be answered.
-await expireAllPending(db, new Date());
+// A restart drops every held hook request, so approvals still pending can never be answered. This is also
+// the first query, so a database that's down or not migrated stops the server here, with one clear line
+// instead of Drizzle's error, which quotes the query and its parameters.
+try {
+  await expireAllPending(db, new Date());
+} catch (error) {
+  console.error(
+    `Can't use the database (${describeDbError(error)}). Check DATABASE_URL, that Postgres is running, and that migrations have run (pnpm db:migrate).`,
+  );
+  await close();
+  process.exit(1);
+}
 const app = await buildApp({
   db,
   mailer: env.RESEND_API_KEY && env.EMAIL_FROM ? createResendMailer({ apiKey: env.RESEND_API_KEY, from: env.EMAIL_FROM }) : createConsoleMailer(),

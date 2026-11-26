@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app.ts';
 import type { Database } from '../src/db/client.ts';
-import { safeErrorForLog } from '../src/lib/errors.ts';
+import { describeDbError, safeErrorForLog } from '../src/lib/errors.ts';
 import { createClock, createMemoryMailer } from './helpers/app.ts';
 
 const SECRET_EMAIL = 'private.person@example.test';
@@ -81,5 +81,24 @@ describe('safeErrorForLog', () => {
     ]);
     expect(JSON.stringify(safe)).not.toContain('secret');
     expect(safe.stack).toMatch(/^\s+at /);
+  });
+});
+
+describe('describeDbError', () => {
+  it("gives a Postgres error's code, never the query, its parameters or the error's own text", () => {
+    const cause = Object.assign(new Error('Key (email)=(private.person@example.test) already exists.'), {
+      code: '23505',
+      severity: 'ERROR',
+    });
+    const wrapped = new Error(`Failed query: select ... where email = $1\nparams: ${SECRET_EMAIL}`, { cause });
+
+    expect(describeDbError(wrapped)).toBe('Postgres error 23505');
+  });
+
+  it('says why a connection failed', () => {
+    const refused = Object.assign(new AggregateError([], ''), { code: 'ECONNREFUSED' });
+    expect(describeDbError(new Error('Failed query: update "approvals" ...', { cause: refused }))).toBe('ECONNREFUSED');
+    expect(describeDbError(new Error('connect ETIMEDOUT 10.0.0.1:5432'))).toBe('connect ETIMEDOUT 10.0.0.1:5432');
+    expect(describeDbError(undefined)).toBe('unknown error');
   });
 });

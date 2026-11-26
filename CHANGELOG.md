@@ -59,6 +59,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - `SESSION_SECRET` from `.env.example`. Login sessions are looked up by hash, so nothing needs signing.
 
 ### Changed
+- If the database is down or not migrated when the server starts, it stops with one clear line saying why (for example `connect ECONNREFUSED` or `Postgres error 42P01`) and what to check, instead of a raw error quoting the failed query and its parameters.
 - The dashboard loads each page only when it's opened, so an approval link opened on a phone downloads that page alone, not the rules editor, settings or the Pit wall's track. Opening a page link directly shows the start lights while it loads.
 - Behind a proxy (set `TRUST_PROXY`, 1 on Render), rate limits count each person by their own IP instead of the proxy's, so people signing in at the same time don't lock each other out. A client can't pick its own IP by sending a fake `X-Forwarded-For`.
 - Request logs no longer include query strings, so GitHub's and Google's one-time sign-in codes never reach the logs.

@@ -10,6 +10,20 @@ export function requestForLog(request: { method: string; url: string; host?: str
 }
 
 /**
+ * One line saying why a database call failed, for the console when the server or a script can't use
+ * the database. Drizzle wraps the real error, and its message lists the query and parameters; a
+ * Postgres error's own message can quote row values too, so only its code is shown. Others (can't
+ * connect, bad password) say what went wrong, without the connection string.
+ */
+export function describeDbError(error: unknown): string {
+  const cause = error instanceof Error && error.cause ? error.cause : error;
+  const { code, severity, message } = (cause ?? {}) as { code?: unknown; severity?: unknown; message?: unknown };
+  if (severity) return `Postgres error ${typeof code === 'string' ? code : 'unknown'}`;
+  if (typeof message === 'string' && message) return message;
+  return typeof code === 'string' ? code : 'unknown error';
+}
+
+/**
  * What may be logged about an unexpected error. Database errors carry the SQL query, its
  * parameters (emails, token hashes) and Postgres `detail` text with row values, so only the
  * error's type, codes and stack frames are kept, never its message.
